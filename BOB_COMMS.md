@@ -123,12 +123,11 @@ When a user confirms or dismisses a finding, Dev 3 stores the action augmented o
 - **Dev 3 action:** Your version on `Development` has the original `shopwave-api` fixture. Our `express-bookstore-api` fixture is what the frontend renders against. Please use our version — `git checkout Gaurinath_Subash---Frontend-&-Experience -- fixtures/sample-manifest.json` — or Dev 1's real generated manifest whenever that's ready. The schema contract is unchanged.
 - **Dev 1 action:** When you commit your real generated manifest, it will drop straight into `fixtures/sample-manifest.json` and the frontend will render it with no code changes needed — the schema we built against matches the spec exactly.
 - The fixture also lives at `ramp-frontend/src/fixtures/sample-manifest.json` (a copy for Vite's module resolution). Keep both in sync when swapping to the real manifest.
-- **Endpoint shapes we are currently mocking in hooks (for Dev 3):**
-  - `GET /manifest` → returns full manifest JSON (currently loaded from file in `ManifestContext.jsx`)
+- **Endpoint shapes currently mocked in hooks (for Dev 3 to wire at Sync 3):**
+  - `GET /manifest` → full manifest JSON (currently loaded from file in `ManifestContext.jsx`)
   - `GET /progress/:userId` + `PUT /progress/:userId` → currently local React state in `ProgressContext.jsx`
   - `POST /grade` body: `{ explanation: string, rubric: RubricItem[] }` → `{ score, covered[], missed[], misconceptions[], feedback }` (mocked in `useExplainBack.js`)
   - `POST /transcribe` body: FormData `audio` blob → `{ transcript: string }` (mocked in `useAudioRecorder.js`)
   - All mocks are isolated in hooks — swap to real fetch at Sync 3 with no component changes.
 
 ---
-
