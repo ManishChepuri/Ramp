@@ -1,0 +1,325 @@
+{
+  "version": "1.0",
+  "repo": {
+    "name": "shopwave-api",
+    "commit": "a3f92c1",
+    "generatedAt": "2025-08-28T10:00:00Z"
+  },
+  "overview": {
+    "purpose": "A Node.js REST API powering the ShopWave e-commerce platform. Handles product catalog, cart, orders, and user authentication.",
+    "techStack": ["Node.js", "Express", "PostgreSQL", "Redis", "Jest"],
+    "entryPoints": ["src/server.js", "src/app.js"],
+    "setupSteps": [
+      "npm install",
+      "cp .env.example .env and fill in DB credentials",
+      "npm run db:migrate",
+      "npm run dev"
+    ]
+  },
+  "modules": [
+    {
+      "id": "auth",
+      "name": "Authentication",
+      "summary": "Handles user registration, login, JWT issuance, and session validation. Middleware in src/middleware/auth.js protects routes by verifying tokens on every request. Passwords are hashed with bcrypt before storage.",
+      "keyFiles": ["src/routes/auth.js", "src/middleware/auth.js", "src/models/User.js"],
+      "dependencies": [],
+      "complexity": "medium",
+      "riskLevel": "high",
+      "prerequisites": [],
+      "quiz": [
+        {
+          "question": "Where is JWT token verification applied in this codebase?",
+          "options": [
+            "Inside each individual route handler",
+            "In src/middleware/auth.js as Express middleware applied to protected routes",
+            "In the database model layer",
+            "In the frontend before requests are sent"
+          ],
+          "correctIndex": 1,
+          "explanation": "Authentication is centralised in middleware so it runs consistently on every protected route without duplicating logic. Individual route handlers never re-verify tokens."
+        },
+        {
+          "question": "What happens to a user's password before it is written to the database?",
+          "options": [
+            "It is encrypted with AES-256",
+            "It is stored as plain text for performance",
+            "It is hashed with bcrypt",
+            "It is Base64-encoded"
+          ],
+          "correctIndex": 2,
+          "explanation": "bcrypt is used so the stored value cannot be reversed. Even if the database is compromised, raw passwords are not exposed."
+        },
+        {
+          "question": "Which file defines the Express routes for login and registration?",
+          "options": [
+            "src/app.js",
+            "src/models/User.js",
+            "src/middleware/auth.js",
+            "src/routes/auth.js"
+          ],
+          "correctIndex": 3,
+          "explanation": "src/routes/auth.js contains the POST /login and POST /register route handlers. The middleware file only validates tokens — it does not handle the login flow itself."
+        }
+      ],
+      "explainBack": {
+        "prompt": "In your own words, explain how a login request travels through this codebase from the moment it hits the server to the moment a token is returned to the caller.",
+        "rubric": [
+          { "concept": "Request arrives at POST /login in src/routes/auth.js", "weight": 1, "mustMention": ["route", "auth.js", "login"] },
+          { "concept": "User record is looked up in the database via the User model", "weight": 1, "mustMention": ["model", "database", "User"] },
+          { "concept": "The submitted password is compared against the stored bcrypt hash", "weight": 2, "mustMention": ["bcrypt", "hash", "compare"] },
+          { "concept": "A JWT is signed and returned in the response on success", "weight": 2, "mustMention": ["JWT", "token", "sign"] },
+          { "concept": "Subsequent protected requests attach the token; middleware in auth.js verifies it", "weight": 1, "mustMention": ["middleware", "verify", "protected"] }
+        ]
+      },
+      "sabotage": [
+        {
+          "id": "sab-auth-001",
+          "difficulty": "medium",
+          "file": "src/middleware/auth.js",
+          "symptom": "All authenticated API requests return 401 Unauthorized, even when a valid token is provided in the Authorization header.",
+          "injectedDiff": "-  const token = req.headers.authorization?.split(' ')[1];\n+  const token = req.headers.authorization?.split(' ')[0];",
+          "correctOriginal": "const token = req.headers.authorization?.split(' ')[1];",
+          "hints": [
+            "The error is happening before any route handler runs.",
+            "Look at how the token is being extracted from the request headers.",
+            "Authorization headers follow the format 'Bearer <token>' — check which index is being read."
+          ]
+        }
+      ],
+      "quests": [
+        {
+          "id": "q-auth-001",
+          "title": "Add token expiry to the error message",
+          "type": "starter",
+          "difficulty": "easy",
+          "xp": 10,
+          "files": ["src/middleware/auth.js"],
+          "rationale": "The current 401 response does not distinguish between an invalid token and an expired one. A one-line change to the error message improves debuggability with no risk to the auth logic."
+        },
+        {
+          "id": "q-auth-002",
+          "title": "Fix outdated README login example",
+          "type": "doc-fix",
+          "difficulty": "easy",
+          "xp": 10,
+          "files": ["README.md"],
+          "rationale": "The README curl example for POST /login uses a field called 'username' but the API now expects 'email'. Correcting this prevents confusion for every future developer."
+        }
+      ]
+    },
+    {
+      "id": "orders",
+      "name": "Order Processing",
+      "summary": "Manages the full order lifecycle: creation from cart contents, payment status tracking, and order history retrieval. Orders are persisted to PostgreSQL. Redis is used to cache recent order lookups and reduce DB load on the order history endpoint.",
+      "keyFiles": ["src/routes/orders.js", "src/models/Order.js", "src/services/orderService.js", "src/services/cacheService.js"],
+      "dependencies": ["auth"],
+      "complexity": "high",
+      "riskLevel": "high",
+      "prerequisites": ["auth"],
+      "quiz": [
+        {
+          "question": "Why does the order history endpoint use Redis?",
+          "options": [
+            "To store orders permanently as a backup",
+            "To cache recent lookups and reduce PostgreSQL query load",
+            "To queue orders for asynchronous processing",
+            "Redis is not used in this module"
+          ],
+          "correctIndex": 1,
+          "explanation": "Order history is read-heavy. Redis caches the results of recent lookups so the PostgreSQL database is not queried on every request, improving response time under load."
+        },
+        {
+          "question": "Which file contains the business logic for creating an order from cart contents?",
+          "options": [
+            "src/routes/orders.js",
+            "src/models/Order.js",
+            "src/services/orderService.js",
+            "src/services/cacheService.js"
+          ],
+          "correctIndex": 2,
+          "explanation": "Business logic lives in the service layer (orderService.js), not in the route handler or the model. The route handler calls the service, keeping routing thin."
+        },
+        {
+          "question": "Which module must a developer be certified on before working in Order Processing?",
+          "options": [
+            "No prerequisites — orders are independent",
+            "Authentication, because all order routes are protected",
+            "The product catalog, because orders reference products",
+            "The cache service, because Redis must be understood first"
+          ],
+          "correctIndex": 1,
+          "explanation": "Every order route requires a valid JWT. Understanding how the auth middleware works is a prerequisite to reasoning about what happens when an order request arrives."
+        }
+      ],
+      "explainBack": {
+        "prompt": "Walk through what happens — in this codebase specifically — when a user submits a new order. Start from the HTTP request and end at the database write.",
+        "rubric": [
+          { "concept": "Request hits POST /orders in src/routes/orders.js, passing through auth middleware first", "weight": 1, "mustMention": ["route", "middleware", "auth"] },
+          { "concept": "Route handler delegates to orderService.js for business logic", "weight": 2, "mustMention": ["service", "orderService"] },
+          { "concept": "Order record is written to PostgreSQL via the Order model", "weight": 2, "mustMention": ["database", "PostgreSQL", "Order", "model"] },
+          { "concept": "Redis cache for order history is invalidated or updated on write", "weight": 1, "mustMention": ["Redis", "cache", "invalidat"] }
+        ]
+      },
+      "sabotage": [
+        {
+          "id": "sab-orders-001",
+          "difficulty": "hard",
+          "file": "src/services/orderService.js",
+          "symptom": "New orders appear to be created successfully (201 response returned) but they never appear in the user's order history.",
+          "injectedDiff": "-  await order.save();\n+  order.save();",
+          "correctOriginal": "await order.save();",
+          "hints": [
+            "The route returns 201, so the request is completing — the problem is in what happens after.",
+            "Look at the order persistence call in the service layer.",
+            "The function is async. Is every async operation being properly awaited?"
+          ]
+        }
+      ],
+      "quests": [
+        {
+          "id": "q-orders-001",
+          "title": "Add order status to the history response",
+          "type": "starter",
+          "difficulty": "medium",
+          "xp": 25,
+          "files": ["src/routes/orders.js", "src/models/Order.js"],
+          "rationale": "The GET /orders response currently omits the payment_status field. Adding it requires a small model and route change with no schema migration needed."
+        }
+      ]
+    },
+    {
+      "id": "catalog",
+      "name": "Product Catalog",
+      "summary": "Serves product listings, search, and individual product detail. Search is powered by a basic SQL ILIKE query across name and description fields. Product images are stored as URLs referencing an external CDN rather than binary data in the database.",
+      "keyFiles": ["src/routes/products.js", "src/models/Product.js"],
+      "dependencies": [],
+      "complexity": "low",
+      "riskLevel": "low",
+      "prerequisites": [],
+      "quiz": [
+        {
+          "question": "How is product search implemented in this codebase?",
+          "options": [
+            "A dedicated Elasticsearch cluster",
+            "A SQL ILIKE query on the name and description columns",
+            "An in-memory filter over a cached full product list",
+            "A third-party search API"
+          ],
+          "correctIndex": 1,
+          "explanation": "Search is a SQL ILIKE pattern match. It is simple and sufficient for the current scale, but it means search performance degrades as the products table grows large."
+        },
+        {
+          "question": "Where are product images stored?",
+          "options": [
+            "As binary blobs in the PostgreSQL products table",
+            "In the local filesystem on the server",
+            "As URLs pointing to an external CDN",
+            "In a dedicated AWS S3 bucket accessed directly by the API"
+          ],
+          "correctIndex": 2,
+          "explanation": "The database stores only the CDN URL string. This keeps the database lean and delegates image delivery to the CDN, which is optimised for it."
+        }
+      ],
+      "explainBack": {
+        "prompt": "Explain how a search request for products works in this codebase. What does the query look like, and what are the performance implications?",
+        "rubric": [
+          { "concept": "GET /products accepts a query parameter that is passed to the Product model", "weight": 1, "mustMention": ["route", "query", "parameter"] },
+          { "concept": "The model runs a SQL ILIKE query against name and description", "weight": 2, "mustMention": ["ILIKE", "SQL", "name", "description"] },
+          { "concept": "Performance degrades at scale because ILIKE cannot use a standard B-tree index", "weight": 2, "mustMention": ["performance", "index", "scale"] }
+        ]
+      },
+      "sabotage": [],
+      "quests": [
+        {
+          "id": "q-catalog-001",
+          "title": "Return 404 when a product ID does not exist",
+          "type": "starter",
+          "difficulty": "easy",
+          "xp": 10,
+          "files": ["src/routes/products.js"],
+          "rationale": "GET /products/:id currently returns an empty 200 response when the product is not found. Returning 404 is a one-line fix that makes the API behave correctly and is safe to change."
+        },
+        {
+          "id": "q-catalog-002",
+          "title": "Fix docs claiming search uses Elasticsearch",
+          "type": "doc-fix",
+          "difficulty": "easy",
+          "xp": 10,
+          "files": ["docs/search.md"],
+          "rationale": "docs/search.md incorrectly states that product search is powered by Elasticsearch. It uses a SQL ILIKE query. Correcting this prevents developers from expecting Elasticsearch infrastructure that does not exist."
+        }
+      ]
+    }
+  ],
+  "diagrams": [
+    {
+      "type": "architecture",
+      "title": "System Architecture",
+      "mermaid": "graph TD\n  Client[Browser / Mobile Client]\n  Client -->|HTTP| Express[Express Server]\n  Express --> AuthMW[Auth Middleware]\n  AuthMW --> Routes[Route Handlers]\n  Routes --> Services[Service Layer]\n  Services --> Models[Models]\n  Models --> PG[(PostgreSQL)]\n  Services --> Cache[Cache Service]\n  Cache --> Redis[(Redis)]"
+    },
+    {
+      "type": "sequence",
+      "title": "Login Request Flow",
+      "mermaid": "sequenceDiagram\n  participant Client\n  participant Router as routes/auth.js\n  participant Model as models/User.js\n  participant DB as PostgreSQL\n  Client->>Router: POST /login { email, password }\n  Router->>Model: findByEmail(email)\n  Model->>DB: SELECT * FROM users WHERE email = ?\n  DB-->>Model: user row\n  Model-->>Router: user object\n  Router->>Router: bcrypt.compare(password, user.hash)\n  Router-->>Client: 200 { token: JWT }"
+    }
+  ],
+  "docDrift": [
+    {
+      "id": "drift-001",
+      "docClaim": "README.md states that the login endpoint accepts a 'username' field.",
+      "codeReality": "src/routes/auth.js expects an 'email' field. There is no 'username' field in the request body or the User model.",
+      "location": "README.md, line 42",
+      "severity": "high",
+      "suggestedCorrection": "Replace 'username' with 'email' in the curl example under the Authentication section.",
+      "correctionDiff": "-  curl -X POST /login -d '{\"username\": \"alice\"}'\n+  curl -X POST /login -d '{\"email\": \"alice@example.com\"}'"
+    },
+    {
+      "id": "drift-002",
+      "docClaim": "docs/search.md states that product search is powered by Elasticsearch.",
+      "codeReality": "src/models/Product.js uses a SQL ILIKE query directly against PostgreSQL. There is no Elasticsearch client anywhere in the codebase.",
+      "location": "docs/search.md, line 8",
+      "severity": "high",
+      "suggestedCorrection": "Replace the Elasticsearch description with an accurate description of the ILIKE query approach and note its scaling limitations.",
+      "correctionDiff": "-  Search is powered by Elasticsearch for fast full-text matching.\n+  Search uses a PostgreSQL ILIKE query on the name and description columns.\n+  This is sufficient for small catalogs but degrades without a full-text index at scale."
+    },
+    {
+      "id": "drift-003",
+      "docClaim": "docs/setup.md says to run 'npm run start' to launch the development server.",
+      "codeReality": "package.json defines 'dev' as the development script (runs nodemon). 'start' runs the production build with no hot reload.",
+      "location": "docs/setup.md, line 19",
+      "severity": "medium",
+      "suggestedCorrection": "Change 'npm run start' to 'npm run dev' in the local development setup instructions.",
+      "correctionDiff": "-  npm run start\n+  npm run dev"
+    }
+  ],
+  "glossary": [
+    { "term": "JWT", "definition": "JSON Web Token — a signed string encoding user identity, passed in the Authorization header on every authenticated request. Stateless: the server verifies the signature rather than looking up a session." },
+    { "term": "Middleware", "definition": "A function that runs between the HTTP request arriving and the route handler executing. In this codebase, auth middleware validates the JWT before any protected route handler runs." },
+    { "term": "Service layer", "definition": "Files in src/services/ that contain business logic. Route handlers call services; services call models. This keeps routes thin and logic testable." },
+    { "term": "ILIKE", "definition": "A PostgreSQL operator for case-insensitive pattern matching. Used in product search. Cannot use a standard B-tree index, so query time grows with table size." }
+  ],
+  "dangerZones": [
+    {
+      "path": "src/middleware/auth.js",
+      "reason": "Every authenticated request passes through this file. A bug here breaks the entire API. High test coverage exists but changes should be reviewed carefully.",
+      "churn": 12,
+      "coverage": 94
+    },
+    {
+      "path": "src/services/orderService.js",
+      "reason": "Contains the order creation transaction. Any mistake here risks silent data loss (orders appearing successful but not persisted). Low test coverage.",
+      "churn": 8,
+      "coverage": 41
+    }
+  ],
+  "badges": [
+    { "id": "first-light", "name": "First Light", "criteria": "Viewed the project overview and setup steps" },
+    { "id": "cartographer", "name": "Cartographer", "criteria": "Viewed all architecture diagrams" },
+    { "id": "doc-detective", "name": "Doc Detective", "criteria": "Confirmed at least one doc-drift finding" },
+    { "id": "bug-hunter", "name": "Bug Hunter", "criteria": "Successfully located and fixed a sabotage challenge" },
+    { "id": "in-your-own-words", "name": "In Your Own Words", "criteria": "Passed an explain-back challenge" },
+    { "id": "rent-paid", "name": "Rent Paid", "criteria": "Submitted a doc correction during onboarding" },
+    { "id": "certified", "name": "Certified", "criteria": "Passed all module quizzes above the 80% threshold" },
+    { "id": "first-blood", "name": "First Blood", "criteria": "Completed your first quest" }
+  ]
+}
