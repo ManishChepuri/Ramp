@@ -61,7 +61,7 @@ Do these together before splitting.
 
 ---
 
-## Dev 1 — Pipeline & CLI
+## Dev 1 — Pipeline & CLI (Manish Chepuri)
 
 ### Track 1A — Bob generation (start here)
 
@@ -108,7 +108,7 @@ Do these together before splitting.
 
 ---
 
-## Dev 2 — Frontend & Experience
+## Dev 2 — Frontend & Experience (Gaurinath Subash)
 
 **Builds entirely against `fixtures/sample-manifest.json`. Never blocked on Bob.**
 
@@ -149,7 +149,7 @@ Do these together before splitting.
 
 ---
 
-## Dev 3 — Backend & Integrations
+## Dev 3 — Backend & Integrations (Joshua Micheal)
 
 **Also builds against the fixture. Not blocked on Bob or on Dev 2.**
 
