@@ -1,0 +1,17 @@
+# Credentials — never include in Bob context
+.env
+*.env
+.env.*
+
+# Node dependencies — too large, not useful context for Bob
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Local fallback data (may contain user progress with personal info)
+ramp-backend/data/fallback/
+
+# Logs
+*.log

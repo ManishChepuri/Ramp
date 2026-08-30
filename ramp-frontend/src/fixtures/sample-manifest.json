@@ -1,0 +1,331 @@
+{
+  "version": "1.0",
+  "repo": {
+    "name": "express-bookstore-api",
+    "commit": "a3f9c12",
+    "generatedAt": "2025-08-28T09:00:00Z"
+  },
+  "overview": {
+    "purpose": "A RESTful bookstore API built with Node.js and Express. Provides CRUD operations for books, authors, and orders. Uses PostgreSQL for persistence and Redis for caching popular book queries.",
+    "techStack": ["Node.js", "Express", "PostgreSQL", "Redis", "Jest", "Docker"],
+    "entryPoints": ["src/server.js", "src/app.js"],
+    "setupSteps": [
+      "npm install",
+      "cp .env.example .env — fill in DB_URL and REDIS_URL",
+      "npm run db:migrate",
+      "npm run dev"
+    ]
+  },
+  "modules": [
+    {
+      "id": "api-layer",
+      "name": "API Layer",
+      "summary": "Express router configuration, middleware pipeline, and request/response lifecycle. All HTTP endpoints are defined here, including versioning under /api/v1. Auth middleware is applied per-router, not per-route.",
+      "keyFiles": [
+        "src/app.js",
+        "src/routes/books.js",
+        "src/routes/authors.js",
+        "src/routes/orders.js",
+        "src/middleware/auth.js",
+        "src/middleware/errorHandler.js"
+      ],
+      "dependencies": [],
+      "complexity": "medium",
+      "riskLevel": "high",
+      "prerequisites": [],
+      "quiz": [
+        {
+          "question": "Where is authentication middleware applied in the API layer?",
+          "options": [
+            "Per individual route handler using a decorator pattern",
+            "Per-router in the route file, applied to all routes in that group",
+            "Globally in app.js before all route registration",
+            "In the database layer as a query interceptor"
+          ],
+          "correctIndex": 1,
+          "explanation": "Auth middleware is applied per-router — meaning every route in a given file inherits it. This is set in each route file (e.g. books.js uses router.use(auth)), not per individual handler or globally."
+        },
+        {
+          "question": "What is the base path prefix for all API endpoints?",
+          "options": ["/v1", "/api", "/api/v1", "/bookstore/api"],
+          "correctIndex": 2,
+          "explanation": "All routes are versioned under /api/v1. This allows future breaking changes to be introduced under /api/v2 without disrupting existing clients."
+        },
+        {
+          "question": "Which file is the Express application entry point (not the HTTP server)?",
+          "options": ["src/server.js", "src/app.js", "src/routes/index.js", "src/middleware/auth.js"],
+          "correctIndex": 1,
+          "explanation": "src/app.js creates and configures the Express app — middleware, routes, error handler. src/server.js simply imports the app and calls app.listen(). Separating them makes testing easier."
+        },
+        {
+          "question": "How are unhandled errors surfaced to the client?",
+          "options": [
+            "Each route handler has its own try/catch that sends a 500",
+            "Express default error handler formats them as HTML",
+            "A central errorHandler middleware formats all thrown errors as JSON",
+            "Errors crash the process and are restarted by a process manager"
+          ],
+          "correctIndex": 2,
+          "explanation": "src/middleware/errorHandler.js is registered last in app.js. Any error passed to next(err) — including async throws — flows here and is formatted as a consistent JSON error response."
+        }
+      ],
+      "explainBack": {
+        "prompt": "In your own words, explain how an incoming HTTP request flows through this codebase from the moment it arrives until a response is sent. Be specific about what each middleware does and in what order.",
+        "rubric": [
+          { "concept": "Request enters app.js and passes through global middleware (CORS, body parser, logging)", "weight": 2, "mustMention": ["app.js", "middleware"] },
+          { "concept": "Router selects the correct route file based on path prefix (/api/v1/books etc)", "weight": 2, "mustMention": ["router", "route"] },
+          { "concept": "Auth middleware validates the JWT token before any route handler runs", "weight": 3, "mustMention": ["auth", "JWT", "token"] },
+          { "concept": "Route handler processes the request, calls service/data layer, sends response", "weight": 2, "mustMention": ["handler", "response"] },
+          { "concept": "Errors passed to next(err) are caught by errorHandler and formatted as JSON", "weight": 1, "mustMention": ["errorHandler", "error"] }
+        ]
+      },
+      "sabotage": [
+        {
+          "id": "sab-001",
+          "difficulty": "medium",
+          "file": "src/middleware/auth.js",
+          "symptom": "All API requests return 200 OK regardless of whether a valid JWT token is provided. Even requests with no Authorization header succeed.",
+          "injectedDiff": "-  if (!token) return next(createError(401, 'No token provided'));\n+  if (!token) return next();",
+          "correctOriginal": "if (!token) return next(createError(401, 'No token provided'));",
+          "hints": [
+            "The symptom affects all routes equally — focus on code that runs before every handler.",
+            "Look at the auth middleware function. Trace what happens when the Authorization header is missing.",
+            "Line 14 of src/middleware/auth.js — the early return on missing token has been modified."
+          ]
+        }
+      ],
+      "quests": [
+        {
+          "id": "q-api-001",
+          "title": "Add request ID header to all responses",
+          "type": "starter",
+          "difficulty": "easy",
+          "xp": 10,
+          "files": ["src/middleware/requestId.js", "src/app.js"],
+          "rationale": "Low-blast-radius addition. Creates a new middleware file and registers it in app.js. Teaches the middleware registration pattern without touching existing logic."
+        },
+        {
+          "id": "q-api-002",
+          "title": "Fix outdated authentication docs",
+          "type": "doc-fix",
+          "difficulty": "easy",
+          "xp": 10,
+          "files": ["README.md"],
+          "rationale": "README claims auth uses session cookies but the code uses JWT Bearer tokens. Safe first contribution — docs only, no code change."
+        }
+      ]
+    },
+    {
+      "id": "data-layer",
+      "name": "Data Layer",
+      "summary": "PostgreSQL access via pg-promise. All queries are in typed repository classes — BookRepository, AuthorRepository, OrderRepository. Redis is used as a read-through cache for the books list endpoint with a 60-second TTL.",
+      "keyFiles": [
+        "src/db/index.js",
+        "src/repositories/BookRepository.js",
+        "src/repositories/AuthorRepository.js",
+        "src/repositories/OrderRepository.js",
+        "src/cache/redis.js",
+        "src/db/migrations/"
+      ],
+      "dependencies": ["api-layer"],
+      "complexity": "high",
+      "riskLevel": "high",
+      "prerequisites": ["api-layer"],
+      "quiz": [
+        {
+          "question": "How long does the Redis cache store the book list before expiring?",
+          "options": ["30 seconds", "60 seconds", "5 minutes", "Until manually invalidated"],
+          "correctIndex": 1,
+          "explanation": "The Redis TTL is set to 60 seconds in src/cache/redis.js. This means the book list may be up to 60 seconds stale after a write. Cache is invalidated explicitly on write operations."
+        },
+        {
+          "question": "What library is used for PostgreSQL queries?",
+          "options": ["pg (node-postgres) directly", "Sequelize ORM", "pg-promise", "Knex query builder"],
+          "correctIndex": 2,
+          "explanation": "pg-promise wraps node-postgres and adds promise support, parameterized queries, and transaction helpers. Repository classes use the db instance from src/db/index.js."
+        },
+        {
+          "question": "Which module is most dangerous to modify without understanding its blast radius?",
+          "options": ["src/cache/redis.js", "src/db/index.js", "src/repositories/BookRepository.js", "src/db/migrations/"],
+          "correctIndex": 1,
+          "explanation": "src/db/index.js creates the single shared database connection pool used by all three repositories. Changing it affects every data operation in the system — the highest blast radius of any file in this layer."
+        },
+        {
+          "question": "What pattern do the repository classes follow for write operations with respect to caching?",
+          "options": [
+            "Write to cache first, then async write to DB",
+            "Write to DB, then explicitly invalidate the relevant cache key",
+            "Write to DB only; cache expires naturally via TTL",
+            "All writes bypass both cache and DB and use an event queue"
+          ],
+          "correctIndex": 1,
+          "explanation": "Repository write methods (create, update, delete) write to PostgreSQL first, then call the Redis client to delete the affected cache key. This ensures consistency at the cost of one extra cache miss after each write."
+        }
+      ],
+      "explainBack": {
+        "prompt": "Describe how a GET /api/v1/books request retrieves data. Walk through the cache check, what happens on a hit vs a miss, and what the repository does when talking to the database.",
+        "rubric": [
+          { "concept": "Request hits the route handler which calls BookRepository.findAll()", "weight": 2, "mustMention": ["BookRepository", "findAll"] },
+          { "concept": "Repository checks Redis for a cached result before querying PostgreSQL", "weight": 3, "mustMention": ["Redis", "cache"] },
+          { "concept": "On cache hit: returns cached JSON directly without touching the DB", "weight": 2, "mustMention": ["hit", "cache"] },
+          { "concept": "On cache miss: queries PostgreSQL, stores result in Redis with 60s TTL, returns result", "weight": 3, "mustMention": ["miss", "PostgreSQL", "TTL"] }
+        ]
+      },
+      "sabotage": [
+        {
+          "id": "sab-002",
+          "difficulty": "hard",
+          "file": "src/repositories/OrderRepository.js",
+          "symptom": "POST /api/v1/orders returns 200 and a valid order object, but the order never appears in subsequent GET requests. The database shows no new rows after a POST.",
+          "injectedDiff": "-  await db.none('INSERT INTO orders ...');\n+  await db.none('INSERT INTO orders ...'); // await removed on commit\n-  await db.tx(t => t.none('COMMIT'));",
+          "correctOriginal": "await db.tx(async t => { await t.none(insertQuery, values); });",
+          "hints": [
+            "The order is created in memory but not persisted. Focus on the write path in OrderRepository.",
+            "Look at how the transaction is committed in OrderRepository.create(). Is the commit actually awaited?",
+            "Line 34 — the transaction wrapper is present but the await before the commit call was removed."
+          ]
+        }
+      ],
+      "quests": [
+        {
+          "id": "q-data-001",
+          "title": "Add index on orders.created_at column",
+          "type": "starter",
+          "difficulty": "medium",
+          "xp": 25,
+          "files": ["src/db/migrations/004_add_order_index.js"],
+          "rationale": "New migration file only — no changes to existing migrations or repository code. Good first exposure to the migration pattern."
+        }
+      ]
+    },
+    {
+      "id": "test-suite",
+      "name": "Test Suite",
+      "summary": "Jest test suite with unit tests for repositories (using pg-mem as an in-memory PostgreSQL) and integration tests for API routes using supertest. Test coverage sits at 67% — the orders route is notably undertested.",
+      "keyFiles": [
+        "tests/unit/BookRepository.test.js",
+        "tests/unit/AuthorRepository.test.js",
+        "tests/integration/books.test.js",
+        "tests/integration/orders.test.js",
+        "tests/helpers/dbSetup.js",
+        "jest.config.js"
+      ],
+      "dependencies": ["api-layer", "data-layer"],
+      "complexity": "medium",
+      "riskLevel": "low",
+      "prerequisites": ["api-layer", "data-layer"],
+      "quiz": [
+        {
+          "question": "What library is used to simulate PostgreSQL in unit tests?",
+          "options": ["sqlite3 in-memory mode", "pg-mem (in-memory PostgreSQL)", "A real test database running in Docker", "Mock functions only — no DB simulation"],
+          "correctIndex": 1,
+          "explanation": "pg-mem provides an in-memory implementation of the PostgreSQL wire protocol. Unit tests use it via tests/helpers/dbSetup.js, which sets up a fresh database before each test."
+        },
+        {
+          "question": "Which part of the system is most undertested according to the coverage report?",
+          "options": ["BookRepository", "AuthorRepository", "The orders route and OrderRepository", "The auth middleware"],
+          "correctIndex": 2,
+          "explanation": "The module summary flags orders as notably undertested. tests/integration/orders.test.js exists but covers only the happy path — no tests for invalid payloads, missing auth, or transaction failures."
+        },
+        {
+          "question": "What library is used for HTTP integration tests?",
+          "options": ["Postman collection runner", "supertest", "axios + a running dev server", "nock for HTTP mocking"],
+          "correctIndex": 1,
+          "explanation": "supertest wraps the Express app and makes HTTP requests without starting a real server on a port. Tests import the app directly, making them fast and self-contained."
+        }
+      ],
+      "explainBack": {
+        "prompt": "Explain how the test suite is structured. How do unit tests differ from integration tests here, and what is the known gap in coverage you would prioritize fixing first?",
+        "rubric": [
+          { "concept": "Unit tests use pg-mem to simulate PostgreSQL without a real DB connection", "weight": 2, "mustMention": ["pg-mem", "unit"] },
+          { "concept": "Integration tests use supertest to make HTTP requests against the Express app directly", "weight": 2, "mustMention": ["supertest", "integration"] },
+          { "concept": "The orders route is undertested — only happy path is covered", "weight": 3, "mustMention": ["orders", "coverage"] },
+          { "concept": "dbSetup.js provides a shared test database helper to keep setup DRY", "weight": 1, "mustMention": ["dbSetup"] }
+        ]
+      },
+      "sabotage": [],
+      "quests": [
+        {
+          "id": "q-test-001",
+          "title": "Add test for missing auth token on POST /orders",
+          "type": "starter",
+          "difficulty": "easy",
+          "xp": 10,
+          "files": ["tests/integration/orders.test.js"],
+          "rationale": "Adds one test case to an existing file. No new files, no new patterns. Directly addresses the known coverage gap and is isolated to the test suite."
+        },
+        {
+          "id": "q-test-002",
+          "title": "Fix misleading test coverage badge in README",
+          "type": "doc-fix",
+          "difficulty": "easy",
+          "xp": 10,
+          "files": ["README.md"],
+          "rationale": "README shows 85% coverage badge but actual coverage is 67%. Safe documentation fix with real impact on team trust in the test suite."
+        }
+      ]
+    }
+  ],
+  "diagrams": [
+    {
+      "type": "architecture",
+      "title": "System Architecture",
+      "mermaid": "graph TD\n  Client([HTTP Client]) --> App[src/app.js]\n  App --> AuthMW[auth middleware]\n  AuthMW --> Books[/api/v1/books]\n  AuthMW --> Authors[/api/v1/authors]\n  AuthMW --> Orders[/api/v1/orders]\n  Books --> BookRepo[BookRepository]\n  Authors --> AuthorRepo[AuthorRepository]\n  Orders --> OrderRepo[OrderRepository]\n  BookRepo --> Redis[(Redis Cache)]\n  BookRepo --> PG[(PostgreSQL)]\n  AuthorRepo --> PG\n  OrderRepo --> PG\n  Redis -.->|cache miss| PG"
+    },
+    {
+      "type": "sequence",
+      "title": "GET /books — Cache Flow",
+      "mermaid": "sequenceDiagram\n  participant C as Client\n  participant R as Router\n  participant BR as BookRepository\n  participant Redis\n  participant PG as PostgreSQL\n  C->>R: GET /api/v1/books\n  R->>BR: findAll()\n  BR->>Redis: GET books:list\n  alt Cache Hit\n    Redis-->>BR: cached JSON\n    BR-->>R: books array\n  else Cache Miss\n    Redis-->>BR: null\n    BR->>PG: SELECT * FROM books\n    PG-->>BR: rows\n    BR->>Redis: SET books:list (TTL 60s)\n    BR-->>R: books array\n  end\n  R-->>C: 200 { data: [...] }"
+    }
+  ],
+  "docDrift": [
+    {
+      "id": "drift-001",
+      "docClaim": "Authentication uses session-based cookies. Include the session cookie in all requests.",
+      "codeReality": "src/middleware/auth.js uses JWT Bearer tokens. The Authorization header must contain 'Bearer <token>'.",
+      "location": "README.md — Authentication section",
+      "severity": "high",
+      "suggestedCorrection": "Authentication uses JWT Bearer tokens. Include the token in the Authorization header of all requests:\n\n```\nAuthorization: Bearer <your-jwt-token>\n```\n\nTokens are issued by POST /api/v1/auth/login and expire after 24 hours.",
+      "correctionDiff": "-Authentication uses session-based cookies. Include the session cookie in all requests.\n+Authentication uses JWT Bearer tokens. Include the token in the Authorization header:\n+\n+```\n+Authorization: Bearer <your-jwt-token>\n+```\n+\n+Tokens are issued by POST /api/v1/auth/login and expire after 24 hours."
+    },
+    {
+      "id": "drift-002",
+      "docClaim": "Test coverage is at 85% across all modules.",
+      "codeReality": "jest --coverage reports 67% statement coverage. The orders integration tests cover only the happy path.",
+      "location": "README.md — Testing section, coverage badge",
+      "severity": "medium",
+      "suggestedCorrection": "Test coverage is currently at 67% statement coverage. The orders route is the primary gap — see tests/integration/orders.test.js.",
+      "correctionDiff": "-Test coverage is at 85% across all modules.\n+Test coverage is currently at 67% statement coverage.\n+The orders route is the primary coverage gap — contributions welcome."
+    }
+  ],
+  "glossary": [
+    { "term": "pg-promise", "definition": "A PostgreSQL adapter for Node.js that wraps node-postgres with promise support, parameterized queries, and transaction helpers." },
+    { "term": "Repository pattern", "definition": "An abstraction layer that encapsulates all database queries for a given entity type. In this codebase, BookRepository, AuthorRepository, and OrderRepository each own their entity's data access." },
+    { "term": "pg-mem", "definition": "An in-memory PostgreSQL implementation used in unit tests to avoid a real database dependency." },
+    { "term": "Read-through cache", "definition": "A caching strategy where the cache layer sits between the application and the database. On a cache miss, data is fetched from the DB and stored in cache before returning to the caller." }
+  ],
+  "dangerZones": [
+    {
+      "path": "src/db/index.js",
+      "reason": "Creates the single shared database connection pool. All repository classes depend on this instance — changes here affect every data operation.",
+      "churn": 2,
+      "coverage": 40
+    },
+    {
+      "path": "src/middleware/auth.js",
+      "reason": "Applied to all protected routes. A regression here disables or bypasses authentication globally.",
+      "churn": 5,
+      "coverage": 55
+    }
+  ],
+  "badges": [
+    { "id": "first-light",    "name": "First Light",     "criteria": "Viewed the dashboard for the first time" },
+    { "id": "cartographer",   "name": "Cartographer",    "criteria": "Viewed all architecture diagrams" },
+    { "id": "certified",      "name": "Certified",       "criteria": "Passed quizzes for all modules" },
+    { "id": "doc-detective",  "name": "Doc Detective",   "criteria": "Confirmed a doc-drift finding" },
+    { "id": "rent-paid",      "name": "Rent Paid",       "criteria": "Staged a documentation correction" },
+    { "id": "in-your-words",  "name": "In Your Own Words","criteria": "Passed an explain-back challenge" },
+    { "id": "bug-hunter",     "name": "Bug Hunter",      "criteria": "Solved a sabotage challenge" },
+    { "id": "first-blood",    "name": "First Blood",     "criteria": "Completed your first quest" }
+  ]
+}
