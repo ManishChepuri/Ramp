@@ -17,6 +17,7 @@ const fs    = require('fs');
 const { generate } = require('./lib/generate');
 const { open }     = require('./lib/open');
 const { preflight }= require('./lib/preflight');
+const { prepareDemo } = require('./lib/prepare-demo');
 
 const [,, cmd, ...args] = process.argv;
 
@@ -41,6 +42,17 @@ async function main() {
 
   if (cmd === 'open') {
     await open();
+    return;
+  }
+
+  if (cmd === 'prepare-demo') {
+    const source = args[0];
+    if (!source) {
+      console.error('Usage: ramp prepare-demo <git-url-or-local-repo>');
+      process.exit(1);
+    }
+    preflight();
+    await prepareDemo(source);
     return;
   }
 
@@ -87,10 +99,16 @@ ramp — developer onboarding certification tool
 
 Usage:
   ramp generate <repo>   Generate a curriculum manifest for a repository
+  ramp prepare-demo <source>
+                         Clone/generate a sealed demo and write the fallback fixture
   ramp open              Start the Ramp server and open the browser
   ramp <repo>            Generate (if needed) then open — the typical workflow
 
 Environment variables (set in .env or shell):
+  BOB_API_KEY            Bob Shell API key required for generation
+  BOB_TEAM_ID            Team ID when using a general Bob API key (optional)
+  BOB_MAX_COST           Optional per-generation Bobcoin limit
+  BOB_MAX_TURNS          Optional per-generation turn limit
   RAMP_SERVER_PORT       Port for the local server (default: 3001)
   BOB_PATH               Path to the bob CLI if not on PATH (optional)
 `.trim());

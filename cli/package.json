@@ -7,7 +7,7 @@
     "ramp": "./index.js"
   },
   "scripts": {
-    "test": "node index.js --help"
+    "test": "node --test lib/*.test.js ../pipeline/lib/*.test.js && node index.js --help"
   },
   "dependencies": {
     "dotenv": "^16.3.1",

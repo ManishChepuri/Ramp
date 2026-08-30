@@ -154,8 +154,8 @@
           "difficulty": "medium",
           "file": "src/prisma/prisma-client.ts",
           "symptom": "In development, every time a source file is saved and hot-reload triggers, the application starts throwing 'Too many connections' or similar database connection errors after a few reloads, even though the logic appears unchanged.",
-          "injectedDiff": "-const prisma = global.prisma || new PrismaClient();\n-if (process.env.NODE_ENV === 'development') global.prisma = prisma;\n+const prisma = new PrismaClient();",
-          "correctOriginal": "const prisma = global.prisma || new PrismaClient();\nif (process.env.NODE_ENV === 'development') global.prisma = prisma;",
+          "injectedDiff": "--- a/src/prisma/prisma-client.ts\n+++ b/src/prisma/prisma-client.ts\n@@ -17,5 +17 @@\n-const prisma = global.prisma || new PrismaClient();\n-\n-if (process.env.NODE_ENV === 'development') {\n-  global.prisma = prisma;\n-}\n+const prisma = new PrismaClient();",
+          "correctOriginal": "const prisma = global.prisma || new PrismaClient();\n\nif (process.env.NODE_ENV === 'development') {\n  global.prisma = prisma;\n}",
           "hints": [
             "The error only appears after multiple file saves in development — think about what happens to module-level code each time Node re-evaluates a module.",
             "Check whether the PrismaClient instance is being reused across reloads or freshly constructed every time.",
@@ -299,13 +299,13 @@
           "id": "sab-auth-001",
           "difficulty": "medium",
           "file": "src/app/routes/auth/token.utils.ts",
-          "symptom": "Tokens appear to be issued successfully, but all protected endpoints immediately reject them with a 401 Unauthorized error even seconds after login or registration.",
-          "injectedDiff": "-  return jwt.sign({ user: { id } }, JWT_SECRET || 'superSecret', { expiresIn: '60d' });\n+  return jwt.sign({ user: { id } }, 'wrongSecret', { expiresIn: '60d' });",
-          "correctOriginal": "return jwt.sign({ user: { id } }, JWT_SECRET || 'superSecret', { expiresIn: '60d' });",
+          "symptom": "Login succeeds and protected endpoints initially work, but the token expires after about one minute instead of remaining valid for the documented session duration.",
+          "injectedDiff": "--- a/src/app/routes/auth/token.utils.ts\n+++ b/src/app/routes/auth/token.utils.ts\n@@ -2,5 +2,5 @@\n \n const generateToken = (id: number): string =>\n   jwt.sign({ user: { id } }, process.env.JWT_SECRET || 'superSecret', {\n-    expiresIn: '60d',\n+    expiresIn: '60s',\n   });",
+          "correctOriginal": "expiresIn: '60d',",
           "hints": [
-            "The error occurs on every protected route immediately after receiving a fresh token — this rules out expiry.",
-            "Compare the secret used when signing the token in token.utils.ts with the secret used for verification in auth.ts.",
-            "express-jwt verifies the token signature using JWT_SECRET; if signing used a different string the signature will never match."
+            "The same token works briefly and then stops working, so focus on time-based token claims.",
+            "Inspect the expiresIn option passed to jwt.sign in token.utils.ts.",
+            "The duration unit was changed from days to seconds; restore the original 60-day value."
           ]
         }
       ],
@@ -475,13 +475,13 @@
           "id": "sab-article-001",
           "difficulty": "medium",
           "file": "src/app/routes/article/article.service.ts",
-          "symptom": "Calling DELETE /articles/:slug deletes any article with that slug regardless of who owns it, allowing any authenticated user to remove another user's article.",
-          "injectedDiff": "-  if (article.authorId !== userId) throw new HttpException(403, {});\n+  // ownership check removed",
-          "correctOriginal": "  if (article.authorId !== userId) throw new HttpException(403, {});",
+          "symptom": "GET /api/articles silently skips the newest matching article: the default request starts at the second result, and every explicit offset is shifted forward by one.",
+          "injectedDiff": "--- a/src/app/routes/article/article.service.ts\n+++ b/src/app/routes/article/article.service.ts\n@@ -79,5 +79,5 @@\n     orderBy: {\n       createdAt: 'desc',\n     },\n-    skip: Number(query.offset) || 0,\n+    skip: (Number(query.offset) || 0) + 1,\n     take: Number(query.limit) || 10,",
+          "correctOriginal": "skip: Number(query.offset) || 0,",
           "hints": [
-            "The delete operation completes without a 403 even when the requester did not write the article.",
-            "Compare the ownership guard pattern used in deleteComment — a similar check should exist in deleteArticle.",
-            "Search for authorId comparisons in the service file to find where the guard was removed."
+            "The result count is correct, but the first returned row is not the newest matching article.",
+            "Inspect how the list query maps the offset parameter to Prisma's skip option.",
+            "The injected code adds one to every offset; pass the requested offset through unchanged."
           ]
         }
       ],
@@ -634,8 +634,8 @@
           "difficulty": "medium",
           "file": "src/app/routes/profile/profile.utils.ts",
           "symptom": "Authenticated users always see 'following: false' in the profile response, even for users they have already followed. The follow and unfollow endpoints complete without error, but the returned profile never reflects the actual follow state.",
-          "injectedDiff": "-  following: id ? user.followedBy.some(u => u.id === id) : false\n+  following: id ? user.followedBy.some(u => u.id !== id) : false",
-          "correctOriginal": "  following: id ? user.followedBy.some(u => u.id === id) : false",
+          "injectedDiff": "--- a/src/app/routes/profile/profile.utils.ts\n+++ b/src/app/routes/profile/profile.utils.ts\n@@ -6,5 +6,5 @@\n   bio: user.bio,\n   image: user.image,\n   following: id\n-    ? user?.followedBy.some((followingUser: Partial<User>) => followingUser.id === id)\n+    ? user?.followedBy.some((followingUser: Partial<User>) => followingUser.id !== id)\n     : false,",
+          "correctOriginal": "? user?.followedBy.some((followingUser: Partial<User>) => followingUser.id === id)",
           "hints": [
             "The follow/unfollow service calls succeed and Prisma updates correctly — the bug is not in the database layer.",
             "profileMapper is the only place that computes the 'following' boolean; add a console.log of user.followedBy and id to verify the array contains the expected entry.",
@@ -777,8 +777,8 @@
           "difficulty": "medium",
           "file": "src/app/routes/tag/tag.service.ts",
           "symptom": "GET /api/tags returns up to 10 tags but they are ordered alphabetically instead of by popularity, causing the most-used tags to no longer appear first.",
-          "injectedDiff": "-      orderBy: { articles: { _count: 'desc' } },\n+      orderBy: { name: 'asc' },",
-          "correctOriginal": "      orderBy: { articles: { _count: 'desc' } },",
+          "injectedDiff": "--- a/src/app/routes/tag/tag.service.ts\n+++ b/src/app/routes/tag/tag.service.ts\n@@ -26,9 +26,5 @@\n     select: {\n       name: true,\n     },\n-    orderBy: {\n-      articles: {\n-        _count: 'desc',\n-      },\n-    },\n+    orderBy: { name: 'asc' },\n     take: 10,",
+          "correctOriginal": "orderBy: {\n  articles: {\n    _count: 'desc',\n  },\n},",
           "hints": [
             "The endpoint returns tags but the order seems wrong — check what criteria the query uses to sort results.",
             "Look at the orderBy clause passed to prisma.tag.findMany in tag.service.ts.",
@@ -852,7 +852,7 @@
       "location": "README.md",
       "severity": "medium",
       "suggestedCorrection": "Reorder the Prerequisites section to make clear that npx prisma generate is required before any build or serve command, not just before the first database operation. Move the Prisma generate step directly after npm install and note that it is required for TypeScript compilation.",
-      "correctionDiff": "--- a/README.md\n+++ b/README.md\n@@ -13,6 +13,10 @@ Run the following command to install dependencies:\n ```shell\n npm install\n ```\n+\n+Next, generate the Prisma client (required for TypeScript compilation — do this before running build or serve):\n+\n+```shell\n+npx prisma generate\n+```"
+          "correctionDiff": "--- a/README.md\n+++ b/README.md\n@@ -15,3 +15,9 @@ Run the following command to install dependencies:\n ```shell\n npm install\n ```\n+\n+Next, generate the Prisma client (required for TypeScript compilation — do this before running build or serve):\n+\n+```shell\n+npx prisma generate\n+```"
     }
   ]
 }

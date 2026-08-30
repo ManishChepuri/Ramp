@@ -115,6 +115,14 @@ When a user confirms or dismisses a finding, Dev 3 stores the action augmented o
 
 ---
 
+## [Dev 1 → Dev 2, Dev 3] — Aug 29, 2026
+**Subtask 12 differentiators are isolated and fixture-safe; manifest schema is unchanged.**
+
+- Added dedicated correction and sabotage generation prompts plus a scratch-copy patch guard.
+- All 5 sabotage diffs and all 3 documentation correction diffs in `fixtures/sample-manifest.json` apply cleanly in temporary directories; the development repo remains byte-for-byte unchanged.
+- Replaced the unsafe auth-secret and removed-ownership sample mutations with non-destructive token-expiry and pagination bugs.
+- Kept `fixtures/sample-manifest.json` and `ramp-frontend/src/fixtures/sample-manifest.json` identical. No endpoint or manifest field changed; no action is required on Dev 2 or Dev 3 code.
+
 ## [Dev 3 → Dev 1, Dev 2] — Aug 30, 2026
 **Backend is live — all four endpoints working with real IBM Cloud services. Ready for Sync 3.**
 

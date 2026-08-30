@@ -4,11 +4,10 @@
  * before starting generation. Fails loudly with actionable messages (K7, FR-6.8).
  */
 
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 
 const REQUIRED_ENV = [
-  'WATSONX_API_KEY',
-  'WATSONX_PROJECT_ID',
+  'BOB_API_KEY',
 ];
 
 function preflight() {
@@ -17,7 +16,7 @@ function preflight() {
   // 1. Check bob is on PATH (or BOB_PATH is set)
   const bobCmd = process.env.BOB_PATH || 'bob';
   try {
-    execSync(`${bobCmd} --version`, { stdio: 'pipe' });
+    execFileSync(bobCmd, ['--version'], { stdio: 'pipe' });
     console.log('  ✓ Bob Shell found');
   } catch (_) {
     console.error(`
@@ -30,7 +29,8 @@ function preflight() {
     process.exit(1);
   }
 
-  // 2. Check required env vars
+  // 2. Check Bob authentication. IBM Cloud credentials are backend concerns
+  // and are not required to generate a manifest.
   const missing = REQUIRED_ENV.filter(v => !process.env[v]);
   if (missing.length > 0) {
     console.error(`
@@ -38,7 +38,7 @@ function preflight() {
 
   ${missing.map(v => `  ${v}=`).join('\n')}
 
-  Add these to your .env file at the Ramp repo root.
+  Add this to your .env file at the Ramp repo root.
   Never commit credentials — .env is gitignored.
 `);
     process.exit(1);

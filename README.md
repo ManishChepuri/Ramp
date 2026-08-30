@@ -21,6 +21,9 @@ Ramp generates a structured onboarding curriculum for any codebase using IBM Bob
 ## Quick start
 
 ```bash
+# Configure Bob Shell authentication (never commit the populated .env)
+cp .env.example .env
+
 # Generate the curriculum for a repository
 ramp generate ./path/to/repo
 
@@ -30,6 +33,33 @@ ramp open
 # Convenience — generate if missing, open immediately if present
 ramp ./path/to/repo
 ```
+
+`ramp generate` uses IBM Bob Shell 2.x in non-interactive mode. Set `BOB_API_KEY` in the
+gitignored root `.env`; general API keys also require `BOB_TEAM_ID`.
+
+### Differentiator safety
+
+Generated documentation corrections and sabotage cases use complete unified diffs. Validate all
+of them without touching the target repository:
+
+```bash
+node pipeline/validate-differentiators.js ./path/to/repo ./path/to/ramp-manifest.json
+```
+
+The validator copies each target file to a fresh OS temporary directory, applies the patch only
+there, and verifies the real source file's SHA-256 hash is unchanged.
+
+### Sealed demo preparation
+
+Dev 1 can generate and validate a recording fallback without placing the demo source in Ramp:
+
+```bash
+cd cli
+node index.js prepare-demo <private-local-path-or-public-git-url>
+```
+
+Remote sources are shallow-cloned to a private OS temporary directory. The command validates the
+manifest and every generated diff before atomically writing `fixtures/demo-manifest.json`.
 
 ---
 
