@@ -91,7 +91,7 @@ Usage:
   ramp <repo>            Generate (if needed) then open — the typical workflow
 
 Environment variables (set in .env or shell):
-  RAMP_SERVER_PORT       Port for the local server (default: 4000)
+  RAMP_SERVER_PORT       Port for the local server (default: 3001)
   BOB_PATH               Path to the bob CLI if not on PATH (optional)
 `.trim());
 }

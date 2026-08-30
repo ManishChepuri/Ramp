@@ -8,7 +8,7 @@ const fs          = require('fs');
 const http        = require('http');
 const { spawn }   = require('child_process');
 
-const PORT = parseInt(process.env.RAMP_SERVER_PORT || '4000', 10);
+const PORT = parseInt(process.env.RAMP_SERVER_PORT || '3001', 10);
 
 async function open(repoPath) {
   const url = `http://localhost:${PORT}`;
@@ -71,7 +71,7 @@ function startFallbackServer(repoPath, url) {
         res.writeHead(204); res.end(); return;
       }
 
-      if (req.method === 'GET' && req.url === '/manifest') {
+      if (req.method === 'GET' && req.url === '/api/manifest') {
         const manifestPath = repoPath
           ? path.join(repoPath, 'ramp-manifest.json')
           : path.join(__dirname, '..', '..', 'fixtures', 'sample-manifest.json');
