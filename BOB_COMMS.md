@@ -115,6 +115,32 @@ When a user confirms or dismisses a finding, Dev 3 stores the action augmented o
 
 ---
 
+## [Dev 1 → Dev 2, Dev 3] — Aug 30, 2026
+**Track 1A + 1B fully complete — pipeline, CLI, and Bob skill all done**
+
+- All pipeline sub-tasks (1–11) finished and committed to `Manish_Chepuri---Pipeline-&-CLI`.
+- `ramp generate <repo>` — preflight check, 9-step streaming pipeline, manifest backup/restore on failure.
+- `ramp open` — starts Dev 3's server if present (`ramp-server/server.js`), fallback HTTP server (`GET /manifest`) if not. Browser opens automatically.
+- `ramp <repo>` convenience path — checks manifest commit cache, skips generation if up to date.
+- Bob skill `ramp-generate` packaged at `.bob/skills/ramp-generate/SKILL.md` — portable, no repo-specific references.
+- **Dev 3 action:** Place your server at `ramp-server/server.js` relative to the Ramp repo root. `ramp open` will auto-detect and start it. It receives `RAMP_MANIFEST_PATH` and `PORT` as env vars.
+- **Dev 2 action:** No action needed — manifest and schema unchanged since Sync 2.
+- Ready for Sync 3 whenever Dev 3's backend is wired. Track 1C (differentiators) and 1D (demo prep) are next but not blocking anyone.
+
+---
+
+## [Dev 1 → Dev 2, Dev 3] — Aug 30, 2026
+**SYNC 2 — Real manifest is ready; replace fixture now**
+
+- `ramp-manifest.json` has been generated from `gothinkster/node-express-realworld-example-app` and committed to `Manish_Chepuri---Pipeline-&-CLI` branch.
+- `fixtures/sample-manifest.json` in the Ramp repo has been overwritten with the real manifest. Schema is identical to the fixture spec — no field additions or removals.
+- Manifest stats: 5 modules (`data`, `auth`, `article`, `profile`, `tag`), 2 diagrams, 3 docDrift findings, 16 quiz questions, 10 quests, 5 sabotage cases.
+- **Dev 2 action:** Swap `ramp-frontend/src/fixtures/sample-manifest.json` to the new file: `git checkout Manish_Chepuri---Pipeline-&-CLI -- fixtures/sample-manifest.json` then copy into your src/fixtures/. Your frontend requires no code changes — schema is unchanged.
+- **Dev 3 action:** Same checkout command to get the real manifest for your `GET /manifest` endpoint. Module IDs are: `data`, `auth`, `article`, `profile`, `tag`. Rubric shape is unchanged — `/grade` endpoint will work as-is.
+- One security drift finding (drift-001, severity high): `JWT_SECRET` falls back to `'superSecret'` if not set. Ensure your `.env` has `JWT_SECRET` set to a strong random string — do not rely on the fallback.
+
+---
+
 ## [Dev 2 → Dev 1, Dev 3] — Aug 29, 2026
 **Frontend is fully built and passing build — fixture replaced with richer express-bookstore-api version**
 
@@ -123,12 +149,11 @@ When a user confirms or dismisses a finding, Dev 3 stores the action augmented o
 - **Dev 3 action:** Your version on `Development` has the original `shopwave-api` fixture. Our `express-bookstore-api` fixture is what the frontend renders against. Please use our version — `git checkout Gaurinath_Subash---Frontend-&-Experience -- fixtures/sample-manifest.json` — or Dev 1's real generated manifest whenever that's ready. The schema contract is unchanged.
 - **Dev 1 action:** When you commit your real generated manifest, it will drop straight into `fixtures/sample-manifest.json` and the frontend will render it with no code changes needed — the schema we built against matches the spec exactly.
 - The fixture also lives at `ramp-frontend/src/fixtures/sample-manifest.json` (a copy for Vite's module resolution). Keep both in sync when swapping to the real manifest.
-- **Endpoint shapes we are currently mocking in hooks (for Dev 3):**
-  - `GET /manifest` → returns full manifest JSON (currently loaded from file in `ManifestContext.jsx`)
+- **Endpoint shapes currently mocked in hooks (for Dev 3 to wire at Sync 3):**
+  - `GET /manifest` → full manifest JSON (currently loaded from file in `ManifestContext.jsx`)
   - `GET /progress/:userId` + `PUT /progress/:userId` → currently local React state in `ProgressContext.jsx`
   - `POST /grade` body: `{ explanation: string, rubric: RubricItem[] }` → `{ score, covered[], missed[], misconceptions[], feedback }` (mocked in `useExplainBack.js`)
   - `POST /transcribe` body: FormData `audio` blob → `{ transcript: string }` (mocked in `useAudioRecorder.js`)
   - All mocks are isolated in hooks — swap to real fetch at Sync 3 with no component changes.
 
 ---
-

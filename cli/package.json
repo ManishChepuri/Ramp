@@ -1,0 +1,20 @@
+{
+  "name": "ramp",
+  "version": "0.1.0",
+  "description": "CLI for the Ramp developer onboarding certification tool",
+  "main": "index.js",
+  "bin": {
+    "ramp": "./index.js"
+  },
+  "scripts": {
+    "test": "node index.js --help"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "open": "^9.1.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}
