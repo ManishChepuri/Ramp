@@ -36,10 +36,16 @@ export function useAudioRecorder() {
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
         setPhase('transcribing')
         try {
-          // After Sync 3: replace mock with real fetch('/api/transcribe', { method:'POST', body: formData })
-          await new Promise(r => setTimeout(r, 1200))  // simulate STT latency
-          const mockTranscript = "The API layer is an Express application where all HTTP endpoints are defined under the /api/v1 prefix. Auth middleware is applied at the router level so every route in a group inherits it. When a request comes in it passes through global middleware like CORS and body parsing, then auth validates the JWT token before the route handler runs. Errors thrown in handlers are caught by a central errorHandler middleware."
-          setTranscript(mockTranscript)
+          const formData = new FormData()
+          formData.append('audio', blob)
+          const res = await fetch('/api/transcribe', { method: 'POST', body: formData })
+          const data = await res.json()
+          if (data.error) {
+            setError(data.error)
+            setPhase('error')
+            return
+          }
+          setTranscript(data.transcript)
           setPhase('done')
         } catch {
           setError('Transcription failed. Use the written input instead.')

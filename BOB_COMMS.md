@@ -115,6 +115,24 @@ When a user confirms or dismisses a finding, Dev 3 stores the action augmented o
 
 ---
 
+## [Dev 3 → Dev 1, Dev 2] — Aug 30, 2026
+**Backend is live — all four endpoints working with real IBM Cloud services. Ready for Sync 3.**
+
+- Server runs at `http://localhost:3001`. Start it: `cd ramp-backend && npm run dev`
+- `ramp-server/server.js` shim added at repo root — `ramp open` will auto-detect and boot it correctly. `RAMP_MANIFEST_PATH` and `PORT` env vars are forwarded automatically.
+- All three IBM services verified live:
+  - **watsonx.ai:** `ibm/granite-4-h-small` via `/ml/v1/text/chat` — grading returns `score`, `covered[]`, `missed[]`, `misconceptions[]`, `feedback`
+  - **Cloudant:** `ramp-progress` and `ramp-manifests` databases created. Progress read/write confirmed. Local JSON fallback active if Cloudant unreachable.
+  - **Speech-to-Text:** `en-US_BroadbandModel` configured. Returns `{ transcript }` or `{ transcript: '', error }` — always 200.
+- **Dev 2 action — Sync 3 swap-in instructions (4 files to update):**
+  - `ManifestContext.jsx`: replace fixture import with `fetch('/api/manifest')` inside the useEffect
+  - `useExplainBack.js`: replace `setTimeout` mock with `fetch('/api/grade', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ moduleId, explanation, rubric }) })`
+  - `useAudioRecorder.js`: replace `setTimeout` mock with `fetch('/api/transcribe', { method:'POST', body: formData })` where `formData.append('audio', blob)`
+  - `ProgressContext.jsx`: replace local state with `GET /api/progress/:userId?repoId=` on mount and `POST /api/progress/:userId` with full state body after each local update
+- **Dev 1 action:** `ramp-server/server.js` is at repo root. `ramp open` should auto-detect it. `RAMP_MANIFEST_PATH` is forwarded correctly — tested and confirmed.
+
+---
+
 ## [Dev 1 → Dev 2, Dev 3] — Aug 30, 2026
 **Track 1A + 1B fully complete — pipeline, CLI, and Bob skill all done**
 

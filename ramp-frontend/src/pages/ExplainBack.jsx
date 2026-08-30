@@ -210,7 +210,7 @@ function VoiceTab({ module, onGradeResult }) {
   }, [eb.phase])
 
   function handleSubmitTranscript() {
-    eb.submit(rec.transcript, module.explainBack?.rubric)
+    eb.submit(module.id, rec.transcript, module.explainBack?.rubric)
   }
 
   return (
@@ -416,7 +416,7 @@ export default function ExplainBack({ addToast }) {
             phase={phase}
             result={result}
             error={error}
-            onSubmit={t => submit(t, eb?.rubric)}
+            onSubmit={t => submit(module.id, t, eb?.rubric)}
             onReset={reset}
           />
         )}
