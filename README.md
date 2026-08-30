@@ -2,7 +2,7 @@
 
 **Ramp certifies that a developer actually understands an unfamiliar codebase — and makes the codebase better while they learn it.**
 
-Built with IBM Bob and generated at runtime by IBM watsonx.ai, re-runnable against any local Git repository.
+Built with IBM Bob, generated at runtime by IBM watsonx.ai, re-runnable against any repository.
 
 ---
 
@@ -12,78 +12,46 @@ A developer joining an unfamiliar codebase spends days reconstructing knowledge 
 
 ## The solution
 
-Ramp generates a structured onboarding curriculum for any codebase using a pipeline designed and built with IBM Bob. At runtime, watsonx.ai analyzes a credential-safe view of the repository, then Ramp verifies comprehension through quizzes, explain-back grading (written and spoken), and a quest board. The developer who knows least about the codebase becomes the one improving its documentation on day one.
+Ramp's generation pipeline was designed and built inside IBM Bob's IDE, using Agent mode and parallel subagents. At runtime, `ramp generate` runs that pipeline through IBM watsonx.ai to analyze any codebase and produce a structured onboarding curriculum, then Ramp verifies comprehension through quizzes, explain-back grading (written and spoken), and a quest board. The developer who knows least about the codebase becomes the one improving its documentation on day one.
 
-> **Bob helped build the curriculum engine. watsonx.ai generates and grades. Cloudant remembers.**
+> **Bob built the curriculum engine. watsonx.ai generates and grades. Cloudant remembers.**
 
 ---
 
 ## Quick start
 
+First-time setup (installing dependencies, building the frontend, configuring credentials) is
+one-time — see [`SETUP.md`](SETUP.md) for the full walkthrough. Once that's done:
+
 ```bash
-# Configure watsonx.ai generation (never commit the populated .env)
-cp .env.example .env
-
-# Generate from a local repository or GitHub clone URL
+# Generate the curriculum for a repository
 ramp generate ./path/to/repo
-ramp generate https://github.com/owner/repository
 
-# Launch the last generated repository
+# Launch the Ramp interface
 ramp open
 
-# One command — clone/generate if needed, then open
+# Convenience — generate if missing, open immediately if present
 ramp ./path/to/repo
-ramp https://github.com/owner/repository
 ```
 
-`ramp generate` defaults to IBM watsonx.ai with `ibm/granite-4-h-small`. Set
-`WATSONX_API_KEY` and `WATSONX_PROJECT_ID` in the gitignored root `.env`. The CLI scans only
-Git-visible text files, excludes credentials, binaries, dependencies, lock files, and oversized
-files, and redacts common inline secrets before sending selected content to watsonx.ai.
-
-Bob Shell remains available as an optional provider by setting `RAMP_GENERATION_PROVIDER=bob`
-and `BOB_API_KEY`. That path consumes Bobcoins; the default watsonx path does not.
-
-### Differentiator safety
-
-Generated documentation corrections and sabotage cases use complete unified diffs. Validate all
-of them without touching the target repository:
-
-```bash
-node pipeline/validate-differentiators.js ./path/to/repo ./path/to/ramp-manifest.json
-```
-
-The validator copies each target file to a fresh OS temporary directory, applies the patch only
-there, and verifies the real source file's SHA-256 hash is unchanged.
-
-### Sealed demo preparation
-
-Dev 1 can generate and validate a recording fallback without placing the demo source in Ramp:
-
-```bash
-cd cli
-node index.js prepare-demo <private-local-path-or-public-git-url>
-```
-
-Remote sources are shallow-cloned to a private OS temporary directory. The command validates the
-manifest and every generated diff before atomically writing `fixtures/demo-manifest.json`.
+`ramp` requires `cd cli && npm link` once. Without that, use `node cli/index.js` in place of `ramp`.
 
 ---
 
 ## Architecture
 
 ```
-Local Git repo → safe scanner → watsonx.ai (generation) → ramp-manifest.json → Ramp web app
-                                                                                 ↑
-                                                        watsonx.ai (grading)
-                                                        IBM Cloudant (persistence)
-                                                        IBM Speech-to-Text (transcription)
+Local repo  →  watsonx.ai runs Bob's pipeline  →  ramp-manifest.json  →  Ramp web app
+                                                                              ↑
+                                                                  watsonx.ai (grading)
+                                                                  IBM Cloudant (persistence)
+                                                                  IBM Speech-to-Text (transcription)
 ```
 
 | Component | Responsibility |
 |---|---|
-| `pipeline/` | Curriculum prompts, patch isolation, and optional Bob skill |
-| `cli/` | `ramp` CLI, safe repository scanner, and watsonx generation orchestrator |
+| `pipeline/` | Bob skill and subagent prompts — generates the manifest |
+| `cli/` | `ramp` CLI entry point — orchestrates generation and serving |
 | `ramp-backend/` | Thin Express server — credential proxy for IBM services |
 | `ramp-frontend/` | React + Vite browser app — the full Ramp experience |
 | `ramp-server/server.js` | Entry point shim for `ramp open` auto-detection |
@@ -93,24 +61,27 @@ Local Git repo → safe scanner → watsonx.ai (generation) → ramp-manifest.js
 
 ## Running locally
 
-### Backend
+Full setup (installing dependencies in all three project folders, building the frontend once,
+configuring both `.env` files) is in [`SETUP.md`](SETUP.md); credential-specific detail is also in
+[`ramp-backend/README.md`](ramp-backend/README.md). Once setup is done, the entire workflow is:
 
 ```bash
-cd ramp-backend
-cp .env.example .env    # fill in IBM Cloud credentials
-npm install
-npm run dev             # starts on http://localhost:3001
+ramp generate ./path/to/repo
+ramp open        # starts the backend on http://localhost:3001 and serves the built frontend
 ```
 
-See [`ramp-backend/README.md`](ramp-backend/README.md) for full credential setup instructions.
+`ramp open` starts everything — there is no separate frontend or backend server to run manually.
 
-### Frontend (development)
+### Iterating on frontend code only
 
 ```bash
 cd ramp-frontend
-npm install
-npm run dev             # starts on http://localhost:5173
+npm run dev      # hot-reload dev server on http://localhost:5173, proxies /api to :3001
 ```
+
+This is a development convenience, not part of normal usage. Use `ramp open` for everything else,
+including demos — leaving both servers running at once has caused real bugs in this project when
+their configs drifted out of sync.
 
 ---
 
@@ -118,9 +89,9 @@ npm run dev             # starts on http://localhost:5173
 
 | Service | Role |
 |---|---|
-| **IBM Bob IDE** | Used to design and implement the repository-analysis pipeline, prompts, CLI, schema, and differentiators |
-| **IBM Bob Shell** | Optional legacy generation provider for teams with available Bobcoins |
-| **watsonx.ai (granite-4-h-small)** | Generates repository-specific curricula and grades explain-back submissions at runtime |
+| **IBM Bob IDE** | Agent mode, parallel subagents, document understanding, skills — used to design and build the generation pipeline |
+| **IBM Bob Shell** | Optional generation provider (`RAMP_GENERATION_PROVIDER=bob`), invoked non-interactively |
+| **watsonx.ai (granite-4-h-small)** | Default runtime engine for `ramp generate` — analyzes any repository and builds the curriculum, and grades explain-back submissions against Bob-authored rubrics |
 | **IBM Cloudant** | Persists user progress, certifications, badges, and the contribution ledger |
 | **IBM Speech-to-Text** | Transcribes spoken explain-backs — the developer explains the codebase aloud |
 
