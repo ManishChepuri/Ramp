@@ -1,5 +1,4 @@
 import { createContext, useContext, useState, useEffect } from 'react'
-import manifest from '../fixtures/sample-manifest.json'
 
 const ManifestContext = createContext(null)
 
@@ -8,9 +7,10 @@ export function ManifestProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Point at fixture for now; swap to /api/manifest after Sync 3
-    setData(manifest)
-    setLoading(false)
+    fetch('/api/manifest')
+      .then(r => r.json())
+      .then(json => { setData(json); setLoading(false) })
+      .catch(() => setLoading(false))
   }, [])
 
   return (
