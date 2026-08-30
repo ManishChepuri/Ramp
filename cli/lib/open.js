@@ -6,7 +6,7 @@
 const path        = require('path');
 const fs          = require('fs');
 const http        = require('http');
-const { spawn }   = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 
 const PORT = parseInt(process.env.RAMP_SERVER_PORT || '3001', 10);
 
@@ -30,7 +30,13 @@ async function open(repoPath) {
 
 // ─── start Dev 3's real backend server ───────────────────────────────────────
 
-function startExternalServer(serverEntry, repoPath, url) {
+async function startExternalServer(serverEntry, repoPath, url) {
+  // A previous `ramp open` may still be bound to this port, serving a stale
+  // manifest. `app.listen` has no error handler, so a second bind attempt
+  // would crash the child silently while the CLI reports success. Reclaim
+  // the port first so the server that comes up always matches repoPath.
+  await ensurePortFree(PORT);
+
   return new Promise((resolve, reject) => {
     const env = {
       ...process.env,
@@ -45,15 +51,56 @@ function startExternalServer(serverEntry, repoPath, url) {
       detached: false,
     });
 
-    proc.on('error', reject);
+    let settled = false;
+    proc.on('error', err => { if (!settled) { settled = true; reject(err); } });
+    proc.on('exit', code => {
+      if (!settled && code !== null && code !== 0) {
+        settled = true;
+        reject(new Error(`Ramp server exited immediately (code ${code}) — check the output above.`));
+      }
+    });
 
     // Give the server a moment to bind, then open the browser
     setTimeout(() => {
+      if (settled) return;
+      settled = true;
       launchBrowser(url);
       console.log(`\n  Press Ctrl+C to stop the server.\n`);
       resolve(); // resolve so CLI doesn't hang — server keeps running
     }, 1200);
   });
+}
+
+function findPidsOnPort(port) {
+  try {
+    return execFileSync('lsof', ['-ti', `tcp:${port}`], { stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString().trim().split('\n').filter(Boolean);
+  } catch (_) {
+    // lsof unavailable, or nothing listening — either way, nothing to report
+    return [];
+  }
+}
+
+async function ensurePortFree(port) {
+  let pids = findPidsOnPort(port);
+  if (pids.length === 0) return;
+
+  console.log(`  → Port ${port} is in use by a previous Ramp server — restarting it`);
+  for (const pid of pids) {
+    try { process.kill(Number(pid), 'SIGTERM'); } catch (_) { /* already gone */ }
+  }
+
+  for (let i = 0; i < 30; i += 1) {
+    await new Promise(r => setTimeout(r, 100));
+    pids = findPidsOnPort(port);
+    if (pids.length === 0) return;
+  }
+
+  // Still holding the port after ~3s of graceful shutdown — force it.
+  for (const pid of pids) {
+    try { process.kill(Number(pid), 'SIGKILL'); } catch (_) { /* already gone */ }
+  }
+  await new Promise(r => setTimeout(r, 200));
 }
 
 // ─── fallback: minimal manifest-serving HTTP server ──────────────────────────

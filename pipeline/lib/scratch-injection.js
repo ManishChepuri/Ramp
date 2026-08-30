@@ -110,7 +110,10 @@ function normaliseRelativePath(filePath) {
 }
 
 function applyPatch(cwd, diff, checkOnly) {
-  const args = ['apply', '--whitespace=nowarn', '--unidiff-zero'];
+  // Model-generated unified diffs occasionally contain correct context but stale
+  // hunk counts. --recount derives those counts from the actual +/- lines while
+  // all path and source-isolation checks remain enforced.
+  const args = ['apply', '--whitespace=nowarn', '--unidiff-zero', '--recount'];
   if (checkOnly) args.push('--check');
   args.push('-');
 

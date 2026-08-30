@@ -10,11 +10,11 @@ const { validateDifferentiators } = require('../../pipeline/validate-differentia
 const RAMP_ROOT = path.resolve(__dirname, '..', '..');
 const FALLBACK_PATH = path.join(RAMP_ROOT, 'fixtures', 'demo-manifest.json');
 
-async function prepareDemo(source) {
+async function prepareDemo(source, options = {}) {
   const demoRepo = isRemoteSource(source) ? await cloneSealedRepo(source) : path.resolve(source);
 
   console.log(`\n→ Preparing sealed demo repository at ${demoRepo}`);
-  const generatedPath = await generate(demoRepo);
+  const generatedPath = await generate(demoRepo, options);
   const manifest = JSON.parse(fs.readFileSync(generatedPath, 'utf8'));
   validateManifest(manifest, demoRepo);
   const differentiators = validateDifferentiators(demoRepo, manifest);

@@ -115,6 +115,35 @@ When a user confirms or dismisses a finding, Dev 3 stores the action augmented o
 
 ---
 
+## [Dev 1 → All] — Aug 30, 2026 (02:15 AM ET)
+**Handing off Pipeline & CLI track — full context in `HANDOFF.md` at repo root.**
+
+- watsonx.ai generation was tested end-to-end against a second, structurally different live GitHub
+  repo (`react-redux-realworld-example-app`, not just the original test repo) — this surfaced and
+  fixed 3 real bugs: an over-strict rubric-length check, sabotage generation aborting the whole run
+  when one module's files matched no safe mutation pattern, and `ramp open` silently serving a stale
+  manifest when the backend port was already in use. All fixed; 33/33 tests still pass.
+- Module `summary` text was regenerated to be a real 2-4 sentence orientation (was regressing to one
+  generic sentence, ~78 chars) — this is the only teaching content shown before quiz questions, per
+  the locked schema's design (no other "lesson content" field exists).
+- Schema unchanged. No Dev 2 or Dev 3 action required.
+- **Known open issue relevant to Dev 3:** Cloudant credentials are currently being rejected
+  (`Access is denied due to invalid credentials`) — backend falls back to local JSON progress storage
+  gracefully, but progress isn't persisting to Cloudant. See `HANDOFF.md` §5.1.
+- Most of this session's work is **uncommitted** on `Manish_Chepuri---Pipeline-&-CLI` as of this
+  entry — see `HANDOFF.md` §7 before assuming it's saved.
+
+---
+
+## [Dev 1 → All] — Aug 30, 2026
+**Runtime curriculum generation now defaults to watsonx.ai; schema and frontend/backend contracts are unchanged.**
+
+- `ramp generate <repo>` now uses `ibm/granite-4-h-small` through watsonx.ai by default, so runtime generation does not consume Bobcoins.
+- The CLI sends only a bounded, Git-visible text view after excluding `.env*`, credentials, binaries, dependencies, lock files, and oversized files and redacting common inline secrets.
+- Bob Shell remains an optional provider through `RAMP_GENERATION_PROVIDER=bob`; the original Bob prompts and skill remain in the repository as genuine build artifacts.
+- Generation still writes the locked `ramp-manifest.json` schema and validates every sabotage/correction diff in isolated scratch copies. No Dev 2 or Dev 3 code change is required.
+- Root generation credentials are `WATSONX_API_KEY`, `WATSONX_PROJECT_ID`, and optional `WATSONX_URL`; these are separate from `ramp-backend/.env` runtime service credentials.
+
 ## [Dev 1 → Dev 2, Dev 3] — Aug 29, 2026
 **Subtask 12 differentiators are isolated and fixture-safe; manifest schema is unchanged.**
 

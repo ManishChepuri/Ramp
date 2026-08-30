@@ -71,3 +71,14 @@ test('rejects incomplete line fragments instead of applying them', t => {
   sabotage.injectedDiff = '-value + 1\n+value - 1';
   assert.throws(() => validateSabotage(fixture.root, sabotage), /complete unified diff/);
 });
+
+test('recounts stale model-generated hunk lengths before scratch application', t => {
+  const fixture = createRepositoryFixture();
+  t.after(() => fs.rmSync(fixture.root, { recursive: true, force: true }));
+
+  const sabotage = sabotageCase();
+  sabotage.injectedDiff = sabotage.injectedDiff.replace('@@ -1 +1 @@', '@@ -1,9 +1,7 @@');
+  const result = injectIntoScratch(fixture.root, sabotage, { cleanup: true });
+  assert.equal(result.sourceUnchanged, true);
+  assert.equal(fs.readFileSync(fixture.sourceFile, 'utf8'), 'export const next = value => value + 1;\n');
+});

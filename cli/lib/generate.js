@@ -1,6 +1,6 @@
 'use strict';
 /**
- * Generate a Ramp manifest with Bob Shell 2.x.
+ * Generate a Ramp manifest with the selected provider.
  *
  * Bob emits NDJSON progress events and a final result envelope. The manifest is
  * validated before an atomic rename, so a failed run never damages a previous
@@ -11,6 +11,8 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { spawn, execFileSync } = require('child_process');
+const { resolveProvider } = require('./provider-config');
+const { validateDifferentiators } = require('../../pipeline/validate-differentiators');
 
 const RAMP_ROOT = path.resolve(__dirname, '..', '..');
 const PROMPT_FILES = [
@@ -19,9 +21,10 @@ const PROMPT_FILES = [
   path.join(RAMP_ROOT, 'pipeline', 'prompts', '09-sabotage.md'),
 ];
 
-async function generate(repoPath) {
+async function generate(repoPath, options = {}) {
   const resolvedRepo = path.resolve(repoPath);
   const repoName = path.basename(resolvedRepo);
+  const provider = resolveProvider(options.provider);
   const manifestPath = path.join(resolvedRepo, 'ramp-manifest.json');
   const backupPath = `${manifestPath}.bak`;
   const tempPath = `${manifestPath}.tmp-${process.pid}`;
@@ -32,6 +35,7 @@ async function generate(repoPath) {
   console.log('\n╔═══════════════════════════════════════════╗');
   console.log('║  Ramp — generating curriculum             ║');
   console.log(`║  Repo: ${repoName.slice(0, 34).padEnd(34)}║`);
+  console.log(`║  Provider: ${provider.padEnd(30)}║`);
   console.log('╚═══════════════════════════════════════════╝\n');
 
   if (fs.existsSync(manifestPath)) {
@@ -40,15 +44,16 @@ async function generate(repoPath) {
   }
 
   try {
-    const prompt = loadGenerationPrompt();
-    const manifest = await runBob(resolvedRepo, prompt);
+    const result = await runProvider(provider, resolvedRepo, options);
+    const manifest = result.manifest;
 
     if (repositoryFingerprint(resolvedRepo) !== repositoryStateBefore) {
-      throw new Error('Bob modified the target repository during read-only generation');
+      throw new Error(`${provider} generation modified the target repository`);
     }
 
     stampRepositoryMetadata(manifest, resolvedRepo);
     validateManifest(manifest, resolvedRepo);
+    const differentiators = validateDifferentiators(resolvedRepo, manifest);
 
     fs.writeFileSync(tempPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
     JSON.parse(fs.readFileSync(tempPath, 'utf8'));
@@ -62,7 +67,10 @@ async function generate(repoPath) {
     console.log(`  docDrift : ${manifest.docDrift.length} findings`);
     console.log(`  quizzes  : ${manifest.modules.reduce((total, module) => total + module.quiz.length, 0)} questions`);
     console.log(`  quests   : ${manifest.modules.reduce((total, module) => total + module.quests.length, 0)} quests`);
-    console.log(`  commit   : ${manifest.repo.commit}\n`);
+    console.log(`  commit   : ${manifest.repo.commit}`);
+    console.log(`  patches  : ${differentiators.sabotageCount} sabotage, ${differentiators.correctionCount} corrections`);
+    if (result.metrics) printUsage(result.metrics);
+    else console.log('');
 
     return manifestPath;
   } catch (error) {
@@ -77,6 +85,25 @@ async function generate(repoPath) {
     }
 
     throw error;
+  }
+}
+
+async function runProvider(provider, repoPath, options) {
+  if (provider === 'watsonx') {
+    const { generateWithWatsonx } = require('./watsonx-pipeline');
+    return generateWithWatsonx(repoPath, options);
+  }
+
+  const prompt = loadGenerationPrompt();
+  return { manifest: await runBob(repoPath, prompt), metrics: null, provider: 'bob' };
+}
+
+function printUsage(metrics) {
+  console.log(`  usage    : ${metrics.inputTokens || 0} input + ${metrics.outputTokens || 0} output tokens`);
+  if (Number.isFinite(metrics.estimatedCostUsd)) {
+    console.log(`  estimate : $${metrics.estimatedCostUsd.toFixed(6)} USD (${metrics.requests || 0} inference requests)\n`);
+  } else {
+    console.log(`  estimate : unavailable for ${metrics.modelId || 'custom model'} (${metrics.requests || 0} inference requests)\n`);
   }
 }
 
@@ -254,6 +281,8 @@ function validateManifest(manifest, repoPath) {
     }
     assert(!moduleIds.has(module.id), `${label} duplicates module id "${module.id}"`);
     moduleIds.add(module.id);
+    assert(typeof module.summary === 'string' && module.summary.trim().length >= 120,
+      `${label}.summary must be at least 2 substantive, code-specific sentences (120+ characters) — it is the only teaching content shown before the key files`);
     assert(['low', 'medium', 'high'].includes(module.complexity), `${label} has invalid complexity`);
     assert(['low', 'medium', 'high'].includes(module.riskLevel), `${label} has invalid riskLevel`);
     module.keyFiles.forEach(file => assertRepoFile(repoPath, file, `${label}.keyFiles`));
@@ -266,8 +295,8 @@ function validateManifest(manifest, repoPath) {
         `${label}.quiz[${questionIndex}] has an invalid correctIndex`);
     });
 
-    assert(Array.isArray(module.explainBack?.rubric) && module.explainBack.rubric.length >= 4 &&
-      module.explainBack.rubric.length <= 6, `${label}.explainBack.rubric must contain 4–6 items`);
+    assert(Array.isArray(module.explainBack?.rubric) && module.explainBack.rubric.length >= 3 &&
+      module.explainBack.rubric.length <= 6, `${label}.explainBack.rubric must contain 3–6 items`);
 
     assert(Array.isArray(module.sabotage) && module.sabotage.length >= 1,
       `${label}.sabotage must contain at least one case`);
@@ -317,6 +346,7 @@ module.exports = {
   loadGenerationPrompt,
   parseEvent,
   repositoryFingerprint,
+  runProvider,
   stampRepositoryMetadata,
   validateManifest,
 };

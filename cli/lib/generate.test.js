@@ -51,7 +51,7 @@ function validManifest() {
     modules: [{
       id: 'core',
       name: 'Core',
-      summary: 'Core behavior.',
+      summary: 'Core exports the repository behavior used by the rest of the module graph. It reads configuration on startup and exposes a single entry function that downstream modules call.',
       keyFiles: ['src/index.js'],
       dependencies: [],
       complexity: 'low',

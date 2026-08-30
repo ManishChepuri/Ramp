@@ -2,7 +2,7 @@
 
 **Ramp certifies that a developer actually understands an unfamiliar codebase — and makes the codebase better while they learn it.**
 
-Generated end-to-end by IBM Bob, re-runnable against any repository.
+Built with IBM Bob and generated at runtime by IBM watsonx.ai, re-runnable against any local Git repository.
 
 ---
 
@@ -12,30 +12,37 @@ A developer joining an unfamiliar codebase spends days reconstructing knowledge 
 
 ## The solution
 
-Ramp generates a structured onboarding curriculum for any codebase using IBM Bob's agent pipeline, then verifies comprehension through quizzes, explain-back grading (written and spoken), and a quest board. The developer who knows least about the codebase becomes the one improving its documentation on day one.
+Ramp generates a structured onboarding curriculum for any codebase using a pipeline designed and built with IBM Bob. At runtime, watsonx.ai analyzes a credential-safe view of the repository, then Ramp verifies comprehension through quizzes, explain-back grading (written and spoken), and a quest board. The developer who knows least about the codebase becomes the one improving its documentation on day one.
 
-> **Bob authors the curriculum. watsonx.ai grades the developer against it. Cloudant remembers.**
+> **Bob helped build the curriculum engine. watsonx.ai generates and grades. Cloudant remembers.**
 
 ---
 
 ## Quick start
 
 ```bash
-# Configure Bob Shell authentication (never commit the populated .env)
+# Configure watsonx.ai generation (never commit the populated .env)
 cp .env.example .env
 
-# Generate the curriculum for a repository
+# Generate from a local repository or GitHub clone URL
 ramp generate ./path/to/repo
+ramp generate https://github.com/owner/repository
 
-# Launch the Ramp interface
+# Launch the last generated repository
 ramp open
 
-# Convenience — generate if missing, open immediately if present
+# One command — clone/generate if needed, then open
 ramp ./path/to/repo
+ramp https://github.com/owner/repository
 ```
 
-`ramp generate` uses IBM Bob Shell 2.x in non-interactive mode. Set `BOB_API_KEY` in the
-gitignored root `.env`; general API keys also require `BOB_TEAM_ID`.
+`ramp generate` defaults to IBM watsonx.ai with `ibm/granite-4-h-small`. Set
+`WATSONX_API_KEY` and `WATSONX_PROJECT_ID` in the gitignored root `.env`. The CLI scans only
+Git-visible text files, excludes credentials, binaries, dependencies, lock files, and oversized
+files, and redacts common inline secrets before sending selected content to watsonx.ai.
+
+Bob Shell remains available as an optional provider by setting `RAMP_GENERATION_PROVIDER=bob`
+and `BOB_API_KEY`. That path consumes Bobcoins; the default watsonx path does not.
 
 ### Differentiator safety
 
@@ -66,17 +73,17 @@ manifest and every generated diff before atomically writing `fixtures/demo-manif
 ## Architecture
 
 ```
-IBM Bob (generation)  →  ramp-manifest.json  →  Ramp web app
-                                                      ↑
-                                          watsonx.ai (grading)
-                                          IBM Cloudant (persistence)
-                                          IBM Speech-to-Text (transcription)
+Local Git repo → safe scanner → watsonx.ai (generation) → ramp-manifest.json → Ramp web app
+                                                                                 ↑
+                                                        watsonx.ai (grading)
+                                                        IBM Cloudant (persistence)
+                                                        IBM Speech-to-Text (transcription)
 ```
 
 | Component | Responsibility |
 |---|---|
-| `pipeline/` | Bob skill and subagent prompts — generates the manifest |
-| `cli/` | `ramp` CLI entry point — orchestrates generation and serving |
+| `pipeline/` | Curriculum prompts, patch isolation, and optional Bob skill |
+| `cli/` | `ramp` CLI, safe repository scanner, and watsonx generation orchestrator |
 | `ramp-backend/` | Thin Express server — credential proxy for IBM services |
 | `ramp-frontend/` | React + Vite browser app — the full Ramp experience |
 | `ramp-server/server.js` | Entry point shim for `ramp open` auto-detection |
@@ -111,9 +118,9 @@ npm run dev             # starts on http://localhost:5173
 
 | Service | Role |
 |---|---|
-| **IBM Bob IDE** | Agent mode, parallel subagents, document understanding, skills — generates the entire curriculum |
-| **IBM Bob Shell** | Non-interactive invocation by `ramp generate` — makes Bob a runtime component |
-| **watsonx.ai (granite-4-h-small)** | Grades explain-back submissions at runtime against Bob-authored rubrics |
+| **IBM Bob IDE** | Used to design and implement the repository-analysis pipeline, prompts, CLI, schema, and differentiators |
+| **IBM Bob Shell** | Optional legacy generation provider for teams with available Bobcoins |
+| **watsonx.ai (granite-4-h-small)** | Generates repository-specific curricula and grades explain-back submissions at runtime |
 | **IBM Cloudant** | Persists user progress, certifications, badges, and the contribution ledger |
 | **IBM Speech-to-Text** | Transcribes spoken explain-backs — the developer explains the codebase aloud |
 
