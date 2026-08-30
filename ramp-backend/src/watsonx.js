@@ -7,21 +7,22 @@ const WATSONX_URL = process.env.WATSONX_URL || 'https://us-south.ml.cloud.ibm.co
 const PROJECT_ID = process.env.WATSONX_PROJECT_ID
 const API_KEY = process.env.WATSONX_API_KEY
 
-// Use granite-13b-instruct-v2 — adequate for rubric matching, within budget,
-// not on the out-of-scope list.
-const MODEL_ID = 'ibm/granite-13b-instruct-v2'
+// Use granite-4-h-small — supports text_generation, within budget,
+// not on the out-of-scope list (llama-3-405b, mistral-medium-2505, mistral-small-3-1 are excluded).
+const MODEL_ID = 'ibm/granite-4-h-small'
 const MAX_RETRIES = 2
 
 /**
- * Builds the prompt that instructs the model to grade an explain-back
- * submission against a rubric and return strict JSON.
+ * Builds the chat messages array that instructs the model to grade an
+ * explain-back submission against a rubric and return strict JSON.
+ * granite-4-h-small uses the /text/chat endpoint, not /text/generation.
  */
-function buildGradingPrompt(explanation, rubric) {
+function buildGradingMessages(explanation, rubric) {
   const rubricText = rubric
     .map((r, i) => `${i + 1}. "${r.concept}" (weight: ${r.weight})`)
     .join('\n')
 
-  return `You are a technical onboarding assessor. Grade the developer's explanation against the rubric below.
+  const content = `You are a technical onboarding assessor. Grade the developer's explanation against the rubric below.
 
 RUBRIC:
 ${rubricText}
@@ -37,10 +38,13 @@ Return ONLY valid JSON with this exact shape — no markdown, no prose, no extra
   "misconceptions": [<statements in the explanation that directly contradict the rubric — empty array if none>],
   "feedback": "<one short paragraph of constructive feedback for the developer>"
 }`
+
+  return [{ role: 'user', content }]
 }
 
 /**
  * Calls watsonx.ai to grade a free-text explanation against a rubric.
+ * Uses the /text/chat endpoint (required by granite-4-h-small).
  * Retries up to MAX_RETRIES times if the response is not valid JSON.
  * Returns the degraded response shape if watsonx is unavailable.
  */
@@ -59,8 +63,8 @@ async function gradeExplanation(explanation, rubric) {
     return degraded
   }
 
-  const prompt = buildGradingPrompt(explanation, rubric)
-  const endpoint = `${WATSONX_URL}/ml/v1/text/generation?version=2023-05-29`
+  const messages = buildGradingMessages(explanation, rubric)
+  const endpoint = `${WATSONX_URL}/ml/v1/text/chat?version=2023-05-29`
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
@@ -74,12 +78,10 @@ async function gradeExplanation(explanation, rubric) {
         body: JSON.stringify({
           model_id: MODEL_ID,
           project_id: PROJECT_ID,
-          input: prompt,
+          messages,
           parameters: {
-            decoding_method: 'greedy',
-            max_new_tokens: 600,
+            max_tokens: 600,
             temperature: 0.1,  // low temperature for consistency (FR-3.4)
-            repetition_penalty: 1.05,
           },
         }),
       })
@@ -91,10 +93,10 @@ async function gradeExplanation(explanation, rubric) {
       }
 
       const data = await res.json()
-      const raw = data?.results?.[0]?.generated_text?.trim()
+      const raw = data?.choices?.[0]?.message?.content?.trim()
 
       if (!raw) {
-        console.warn(`[watsonx] Empty generated_text on attempt ${attempt + 1}`)
+        console.warn(`[watsonx] Empty response content on attempt ${attempt + 1}`)
         if (attempt === MAX_RETRIES) return degraded
         continue
       }
