@@ -1,7 +1,8 @@
 import { NavLink } from 'react-router-dom'
-import { useEffect, useRef, useState } from 'react'
-import { useProgress }  from '../../context/ProgressContext'
-import { useCountUp }   from '../../hooks/useCountUp'
+import XpWidget from './XpWidget'
+import Bob from '../Bob'
+import { useProgress } from '../../context/ProgressContext'
+import { LEVELS, hexA } from '../../lib/levels'
 
 const NAV = [
   { to: '/',        label: 'Dashboard',   icon: SquaresIcon   },
@@ -57,51 +58,37 @@ function ChartIcon() {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function Sidebar() {
-  const { xp, levelName, nextLevelXp, prevLevelXp, level } = useProgress()
-  const animatedXp = useCountUp(xp, 700)
-
-  const barPct = nextLevelXp
-    ? Math.round(((xp - prevLevelXp) / (nextLevelXp - prevLevelXp)) * 100)
-    : 100
-
-  // Flash animation when XP changes
-  const [flash, setFlash] = useState(false)
-  const prevXp = useRef(xp)
-  useEffect(() => {
-    if (xp > prevXp.current) {
-      setFlash(true)
-      const t = setTimeout(() => setFlash(false), 600)
-      prevXp.current = xp
-      return () => clearTimeout(t)
-    }
-    prevXp.current = xp
-  }, [xp])
+export default function Sidebar({ collapsed = false, onOpenLadder }) {
+  const { level, levelName, levelAccent } = useProgress()
 
   return (
-    <aside className="w-60 flex-shrink-0 bg-carbon-layer-01 border-r border-carbon-border flex flex-col h-full select-none">
-      {/* Wordmark */}
+    <aside
+      className={`flex-shrink-0 bg-carbon-layer-01 flex flex-col h-full select-none overflow-hidden transition-[width] duration-200 ${
+        collapsed ? 'w-0 border-r-0' : 'w-60 border-r border-carbon-border'
+      }`}
+    >
+      {/* Wordmark — "Ascent": steps resolving into a smooth ramp, then launch */}
       <div className="h-12 flex items-center px-5 border-b border-carbon-border gap-2">
-        <div className="w-6 h-6 bg-carbon-brand rounded flex items-center justify-center flex-shrink-0">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M2 10V2H7C9 2 10 3 10 4.5C10 6 9 7 7 7H2" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </div>
-        <span className="font-bold text-base tracking-tight text-carbon-text-primary">Ramp</span>
+        <svg width="24" height="24" viewBox="0 0 32 32" fill="none" className="flex-shrink-0" aria-hidden="true">
+          <path d="M4 25 L12 25 L12 18" stroke="#6f6f76" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" opacity="0.55"/>
+          <path d="M4 25 C 12 25, 16 21, 28 6" stroke="#4589ff" strokeWidth="3.4" strokeLinecap="round"/>
+          <circle cx="28" cy="6" r="3.1" fill="#4589ff"/>
+        </svg>
+        <span className="font-medium text-base tracking-tight text-carbon-text-primary lowercase">ramp</span>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 py-3 space-y-0.5 px-2">
+      <nav className="flex-1 py-3 space-y-0.5 px-2 stagger-in">
         {NAV.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}
             end={to === '/'}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2 text-sm rounded transition-colors duration-150 ${
+              `flex items-center gap-3 px-3 py-2 text-sm rounded transition-all duration-150 ${
                 isActive
                   ? 'bg-carbon-layer-02 text-carbon-text-primary font-semibold'
-                  : 'text-carbon-text-secondary hover:bg-carbon-layer-02 hover:text-carbon-text-primary'
+                  : 'text-carbon-text-secondary hover:bg-carbon-layer-02 hover:text-carbon-text-primary hover:translate-x-0.5'
               }`
             }
           >
@@ -123,32 +110,35 @@ export default function Sidebar() {
       {/* Divider */}
       <div className="mx-4 border-t border-carbon-border" />
 
-      {/* XP Widget */}
-      <div className="p-4 space-y-2">
-        <div className="flex justify-between items-center">
-          <span className="text-xs font-semibold text-carbon-text-secondary uppercase tracking-wider">
-            {levelName}
+      {/* Level mascot — click to open the full level ladder */}
+      <div className="w-60 flex-shrink-0 px-4 pt-4">
+        <button
+          type="button"
+          onClick={onOpenLadder}
+          aria-label={`${levelName} — level ${level + 1} of ${LEVELS.length}. View level progression.`}
+          className="group flex w-full items-center gap-3 rounded-xl border bg-carbon-layer-02 p-2.5 text-left transition-all duration-150 hover:brightness-110"
+          style={{ borderColor: hexA(levelAccent, 0.4) }}
+        >
+          <span className="flex h-16 w-16 flex-shrink-0 items-end justify-center rounded-lg bg-carbon-layer-01">
+            <Bob index={level} px={58} />
           </span>
-          <span className={`font-mono text-xs font-semibold transition-colors duration-300 ${flash ? 'text-white' : 'text-carbon-xp-gold'}`}>
-            {animatedXp} XP
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold" style={{ color: levelAccent }}>
+              {levelName}
+            </span>
+            <span className="block font-mono text-[10px] text-carbon-text-placeholder">
+              Level {level + 1} of {LEVELS.length}
+            </span>
+            <span className="mt-1 block text-[11px] text-carbon-text-secondary group-hover:text-carbon-text-primary">
+              View level map →
+            </span>
           </span>
-        </div>
+        </button>
+      </div>
 
-        {/* XP bar */}
-        <div className="h-1.5 bg-carbon-layer-02 rounded-full overflow-hidden">
-          <div
-            className={`h-full rounded-full transition-all duration-700 ${flash ? 'bg-carbon-xp-gold' : 'bg-carbon-brand'}`}
-            style={{ width: `${barPct}%` }}
-          />
-        </div>
-
-        {nextLevelXp ? (
-          <p className="font-mono text-xs text-carbon-text-placeholder">
-            {nextLevelXp - xp} XP to next level
-          </p>
-        ) : (
-          <p className="text-xs text-carbon-xp-gold font-medium">Max level reached ✦</p>
-        )}
+      {/* XP Widget — tinted with the current level's accent */}
+      <div className="p-4 w-60 flex-shrink-0">
+        <XpWidget />
       </div>
     </aside>
   )

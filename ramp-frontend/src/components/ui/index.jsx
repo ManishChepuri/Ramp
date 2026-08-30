@@ -148,7 +148,8 @@ export function PrimaryButton({ children, onClick, disabled, className = '', loa
       onClick={onClick}
       disabled={disabled || loading}
       className={`inline-flex items-center gap-2 px-4 py-2 bg-carbon-brand text-white text-sm font-medium rounded
-        hover:bg-carbon-interactive-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${className}`}
+        hover:bg-carbon-interactive-hover disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150
+        hover:-translate-y-px active:scale-[0.97] ${className}`}
     >
       {loading && <LoadingSpinner size="sm" />}
       {children}
@@ -162,7 +163,8 @@ export function GhostButton({ children, onClick, disabled, className = '' }) {
       onClick={onClick}
       disabled={disabled}
       className={`inline-flex items-center gap-2 px-4 py-2 border border-carbon-interactive text-carbon-interactive text-sm font-medium rounded
-        hover:bg-carbon-interactive/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${className}`}
+        hover:bg-carbon-interactive/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150
+        hover:-translate-y-px active:scale-[0.97] ${className}`}
     >
       {children}
     </button>
@@ -175,7 +177,8 @@ export function SubtleButton({ children, onClick, disabled, className = '' }) {
       onClick={onClick}
       disabled={disabled}
       className={`inline-flex items-center gap-2 px-3 py-1.5 border border-carbon-border text-carbon-text-secondary text-xs font-medium rounded
-        hover:bg-carbon-layer-02 hover:text-carbon-text-primary disabled:opacity-40 transition-colors ${className}`}
+        hover:bg-carbon-layer-02 hover:text-carbon-text-primary disabled:opacity-40 transition-all duration-150
+        active:scale-[0.97] ${className}`}
     >
       {children}
     </button>

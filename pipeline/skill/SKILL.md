@@ -74,7 +74,7 @@ Write the output to `pipeline/output/03-diagrams.json`.
 
 ---
 
-## Step 4 — Doc drift detection (runs once)
+## Step 4 — Doc drift detection and correction (runs once)
 
 Use the instructions in `pipeline/prompts/04-drift.md` to produce the `docDrift` array.
 
@@ -87,6 +87,27 @@ If that file does not exist:
 
 Write the output to `pipeline/output/04-drift.json`.
 If no drift is found, write `[]`.
+
+For each genuine finding, apply `pipeline/prompts/08-correction.md` when it exists. Every finding
+must include `suggestedCorrection` and a complete `correctionDiff` with unified-diff headers and
+an `@@` hunk. The diff may modify only the documentation file named by `location`.
+
+---
+
+## Step 4.5 — Sabotage generation and isolation
+
+Apply `pipeline/prompts/09-sabotage.md` to every module. Generate exactly one realistic,
+single-file sabotage case per module, with a complete unified diff and exactly three tiered hints.
+
+Never apply a sabotage diff to the source repository. Validate an injection only through Ramp's
+scratch-copy guard:
+
+```
+node <ramp-repo>/pipeline/isolate-sabotage.js <target-repo> <sabotage-case.json>
+```
+
+The guard copies the target file into an OS temporary directory, checks and applies the patch
+there, hashes the real source file before and after, and fails if the real file changes.
 
 ---
 

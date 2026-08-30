@@ -6,7 +6,7 @@ function QuestCard({ quest, status, locked, onStart, onComplete, lockedReason })
   const borderColor = quest.type === 'doc-fix' ? 'border-l-carbon-quest' : 'border-l-carbon-interactive'
 
   return (
-    <div className={`bg-carbon-layer-01 border border-carbon-border border-l-4 ${borderColor} rounded-lg p-4 relative transition-colors hover:border-carbon-border-strong ${locked ? 'opacity-50' : ''}`}>
+    <div className={`card-hover bg-carbon-layer-01 border border-carbon-border border-l-4 ${borderColor} rounded-lg p-4 relative hover:border-carbon-border-strong ${locked ? 'opacity-50' : ''}`}>
       {locked && (
         <p className="text-xs text-carbon-text-placeholder mb-2 flex items-center gap-1">
           <span>🔒</span> {lockedReason}
@@ -65,7 +65,7 @@ function QuestCard({ quest, status, locked, onStart, onComplete, lockedReason })
 
 function Column({ title, accentClass, count, children, emptyMessage }) {
   return (
-    <div className="flex flex-col gap-3 min-h-0">
+    <div className="flex flex-col gap-3 min-h-0 stagger-in">
       <div className={`flex items-center gap-2 pb-2.5 border-b ${accentClass}`}>
         <h3 className="text-sm font-semibold text-carbon-text-primary">{title}</h3>
         <span className="font-mono text-xs text-carbon-text-placeholder bg-carbon-layer-02 border border-carbon-border px-1.5 py-0.5 rounded-sm">

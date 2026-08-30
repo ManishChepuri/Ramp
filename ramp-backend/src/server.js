@@ -11,9 +11,29 @@ const multer = require('multer')
 const { gradeExplanation } = require('./watsonx')
 const { getProgress, saveProgress } = require('./cloudant')
 const { transcribeAudio } = require('./stt')
+const { getRepoRoot, readRepoFile } = require('./repo')
+const { verifyFix, patchContent } = require('./sabotage-verify')
 
 const app = express()
 const upload = multer({ storage: multer.memoryStorage() })
+
+function manifestPath() {
+  return path.resolve(process.env.MANIFEST_PATH || '../fixtures/sample-manifest.json')
+}
+
+function readManifest() {
+  return JSON.parse(fs.readFileSync(manifestPath(), 'utf8'))
+}
+
+function findSabotage(manifest, moduleId, sabotageId) {
+  const module = (manifest.modules || []).find(m => m.id === moduleId)
+  if (!module) return {}
+  const list = module.sabotage || []
+  const sab = sabotageId
+    ? list.find(s => s.id === sabotageId)
+    : list[0]
+  return { module, sab }
+}
 
 // ---------------------------------------------------------------------------
 // Middleware
@@ -37,20 +57,95 @@ if (fs.existsSync(frontendDist)) {
 // ---------------------------------------------------------------------------
 
 app.get('/api/manifest', (req, res) => {
-  const manifestPath = path.resolve(
-    process.env.MANIFEST_PATH || '../fixtures/sample-manifest.json'
-  )
-
-  if (!fs.existsSync(manifestPath)) {
+  if (!fs.existsSync(manifestPath())) {
     return res.status(404).json({ error: 'Manifest not found. Run ramp generate first.' })
   }
 
   try {
-    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
-    res.json(manifest)
+    res.json(readManifest())
   } catch (err) {
     console.error('[manifest] parse error:', err.message)
     res.status(500).json({ error: 'Failed to read manifest.' })
+  }
+})
+
+// ---------------------------------------------------------------------------
+// Integrated IDE — read-only access to the cloned repository.
+//
+// `ramp generate` clones the target repo alongside the manifest; these routes
+// serve source files from that checkout so the frontend can show the code the
+// developer is studying (Module view) or debugging (Sabotage view). When Ramp
+// has only the fixture manifest (no checkout), `available` is false and the
+// frontend shows a "run ramp generate" state instead of the editor.
+// ---------------------------------------------------------------------------
+
+app.get('/api/repo/meta', (req, res) => {
+  const root = getRepoRoot()
+  res.json({ available: !!root, name: root ? path.basename(root) : null })
+})
+
+app.get('/api/repo/file', (req, res) => {
+  try {
+    res.json(readRepoFile(req.query.path))
+  } catch (err) {
+    const status = err.code === 'NO_REPO' ? 409
+      : err.code === 'NOT_FOUND' ? 404
+      : err.code === 'BAD_PATH' ? 400 : 500
+    if (status === 500) console.error('[repo/file] error:', err.message)
+    res.status(status).json({ error: err.message, code: err.code || 'ERROR' })
+  }
+})
+
+// The file as the developer sees it in Sabotage mode: pristine source with the
+// injected defect applied in-memory (the checkout on disk is never mutated).
+app.get('/api/sabotage/:moduleId/:sabotageId/file', (req, res) => {
+  try {
+    const { moduleId, sabotageId } = req.params
+    const { sab } = findSabotage(readManifest(), moduleId, sabotageId)
+    if (!sab) return res.status(404).json({ error: 'Sabotage case not found.' })
+
+    const source = readRepoFile(sab.file)
+    const buggy = patchContent(source.content, sab.injectedDiff, { reverse: false })
+    if (buggy == null) {
+      return res.status(500).json({ error: 'Could not apply the injected diff to the source file.' })
+    }
+    res.json({ path: source.path, language: source.language, content: buggy, pristineBytes: source.bytes })
+  } catch (err) {
+    const status = err.code === 'NO_REPO' ? 409 : err.code === 'NOT_FOUND' ? 404 : 500
+    if (status === 500) console.error('[sabotage/file] error:', err.message)
+    res.status(status).json({ error: err.message, code: err.code || 'ERROR' })
+  }
+})
+
+// Verify a submitted fix in an isolated scratch copy (see sabotage-verify.js).
+app.post('/api/sabotage/verify', (req, res) => {
+  const { moduleId, sabotageId, file, content, quick } = req.body || {}
+
+  const root = getRepoRoot()
+  if (!root) {
+    return res.json({
+      passed: false,
+      method: 'unavailable',
+      detail: 'Ramp has no repository checkout to test against. Run `ramp generate <repo>` and reopen.',
+    })
+  }
+
+  let sab
+  try {
+    ({ sab } = findSabotage(readManifest(), moduleId, sabotageId))
+  } catch (err) {
+    return res.status(500).json({ passed: false, method: 'error', detail: 'Could not read the manifest.' })
+  }
+  if (!sab) return res.status(404).json({ passed: false, method: 'error', detail: 'Sabotage case not found.' })
+  if (file && file !== sab.file) {
+    return res.status(400).json({ passed: false, method: 'error', detail: 'Submitted file does not match the sabotage target.' })
+  }
+
+  try {
+    res.json(verifyFix({ repoRoot: root, sabotageCase: sab, userContent: content, quick: !!quick }))
+  } catch (err) {
+    console.error('[sabotage/verify] error:', err.message)
+    res.status(500).json({ passed: false, method: 'error', detail: 'Verification failed to run.' })
   }
 })
 
@@ -81,10 +176,12 @@ app.post('/api/grade', async (req, res) => {
 
 app.post('/api/transcribe', upload.single('audio'), async (req, res) => {
   if (!req.file) {
+    console.warn('[transcribe] no "audio" file field in the request')
     return res.json({ transcript: '', error: 'No audio file received.' })
   }
 
   const mimeType = req.file.mimetype || 'audio/webm'
+  console.log(`[transcribe] received ${req.file.size} bytes (${mimeType})`)
   const result = await transcribeAudio(req.file.buffer, mimeType)
   res.json(result)
 })

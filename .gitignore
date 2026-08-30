@@ -15,6 +15,9 @@ build/
 # Local fallback data
 ramp-backend/data/fallback/
 
+# Ramp-managed GitHub clones and last-opened repository state
+.ramp/
+
 # OS
 .DS_Store
 Thumbs.db

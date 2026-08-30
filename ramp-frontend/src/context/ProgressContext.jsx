@@ -1,17 +1,9 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
+import { LEVELS, LEVEL_NAMES, XP_PER_LEVEL, levelIndexForXp } from '../lib/levels'
 
 const ProgressContext = createContext(null)
 
-const XP_PER_LEVEL = [0, 100, 250, 500, 1000]
-const LEVEL_NAMES  = ['Visitor', 'Tourist', 'Resident', 'Local', 'Maintainer']
-
-function computeLevel(xp) {
-  let level = 0
-  for (let i = 0; i < XP_PER_LEVEL.length; i++) {
-    if (xp >= XP_PER_LEVEL[i]) level = i
-  }
-  return level
-}
+const computeLevel = levelIndexForXp
 
 // Stable userId stored in localStorage — no auth required
 function getUserId() {
@@ -32,9 +24,17 @@ export function ProgressProvider({ children }) {
   const [driftStates, setDriftStates]     = useState({})
   const [earnedBadges, setEarnedBadges]   = useState([])
   const [quizHistory, setQuizHistory]     = useState({})
+  const [sabotageHistory, setSabotageHistory] = useState({})
   const [contributions, setContributions] = useState([])
   const [sessionStart]                    = useState(Date.now())
   const [firstCertAt, setFirstCertAt]     = useState(null)
+
+  // Level-up detection — see the effect below. `levelUp` holds { fromIdx, toIdx }
+  // while the celebration modal is showing, or null.
+  const [levelUp, setLevelUp] = useState(null)
+  const [hydrated, setHydrated] = useState(false)
+  const prevXpRef = useRef(0)
+  const absorbedHydrationRef = useRef(false)
 
   // ── Load from server on mount ────────────────────────────────────────────────
   useEffect(() => {
@@ -46,12 +46,32 @@ export function ProgressProvider({ children }) {
         if (d.badges)                   setEarnedBadges(d.badges)
         if (d.quests)                   setQuestStates(d.quests)
         if (d.quizHistory)              setQuizHistory(d.quizHistory)
+        if (d.sabotageHistory)          setSabotageHistory(d.sabotageHistory)
         if (d.contributionLedger)       setContributions(d.contributionLedger)
-        // driftStates is UI-only, not persisted server-side
+        if (d.driftStates)              setDriftStates(d.driftStates)
       })
       .catch(() => { /* Cloudant unreachable — start fresh, local state is fine */ })
+      .finally(() => setHydrated(true))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // ── Fire the level-up modal only on a real climb (never on initial hydration) ─
+  useEffect(() => {
+    if (!hydrated) { prevXpRef.current = xp; return }
+    // The first render after the server load lands the stored XP in one jump —
+    // absorb it silently so we don't celebrate a level the user reached last session.
+    if (!absorbedHydrationRef.current) {
+      absorbedHydrationRef.current = true
+      prevXpRef.current = xp
+      return
+    }
+    const before = computeLevel(prevXpRef.current)
+    const after  = computeLevel(xp)
+    if (after > before) setLevelUp({ fromIdx: before, toIdx: after })
+    prevXpRef.current = xp
+  }, [xp, hydrated])
+
+  const dismissLevelUp = useCallback(() => setLevelUp(null), [])
 
   // ── Persist full state to server after every mutation ────────────────────────
   const persist = useCallback((patch) => {
@@ -64,8 +84,10 @@ export function ProgressProvider({ children }) {
   }, [userId])
 
   // ── Derived values ───────────────────────────────────────────────────────────
-  const level      = computeLevel(xp)
-  const levelName  = LEVEL_NAMES[level]
+  const level       = computeLevel(xp)
+  const levelName   = LEVEL_NAMES[level]
+  const levelAccent = LEVELS[level].accent
+  const levelBlurb  = LEVELS[level].blurb
   const nextLevelXp = XP_PER_LEVEL[level + 1] ?? null
   const prevLevelXp = XP_PER_LEVEL[level] ?? 0
 
@@ -114,6 +136,18 @@ export function ProgressProvider({ children }) {
     })
   }, [persist, userId])
 
+  // Merge a patch into one sabotage case's record and persist the whole map.
+  const recordSabotage = useCallback((sabotageId, patch) => {
+    setSabotageHistory(prev => {
+      const next = {
+        ...prev,
+        [sabotageId]: { ...(prev[sabotageId] || {}), ...patch, lastAttempt: Date.now() },
+      }
+      persist({ userId, sabotageHistory: next })
+      return next
+    })
+  }, [persist, userId])
+
   const setQuestStatus = useCallback((questId, status) => {
     setQuestStates(prev => {
       const next = { ...prev, [questId]: status }
@@ -122,16 +156,25 @@ export function ProgressProvider({ children }) {
     })
   }, [persist, userId])
 
-  const confirmDrift = useCallback((driftId) => {
-    setDriftStates(prev => ({ ...prev, [driftId]: 'confirmed' }))
-  }, [])
+  // Drift finding lifecycle: pending -> confirmed | dismissed -> resolved.
+  // Persisted so a developer's triage survives a reload (FR-2.9 / FR-4.2).
+  const setDriftState = useCallback((driftId, state) => {
+    setDriftStates(prev => {
+      const next = { ...prev, [driftId]: state }
+      persist({ userId, driftStates: next })
+      return next
+    })
+  }, [persist, userId])
 
-  const dismissDrift = useCallback((driftId) => {
-    setDriftStates(prev => ({ ...prev, [driftId]: 'dismissed' }))
-  }, [])
+  const confirmDrift = useCallback((driftId) => setDriftState(driftId, 'confirmed'), [setDriftState])
+  const dismissDrift = useCallback((driftId) => setDriftState(driftId, 'dismissed'), [setDriftState])
+  const reopenDrift  = useCallback((driftId) => setDriftState(driftId, 'pending'), [setDriftState])
+  const resolveDrift = useCallback((driftId) => setDriftState(driftId, 'resolved'), [setDriftState])
 
   const addContribution = useCallback((entry) => {
     setContributions(prev => {
+      // De-dupe by id so shipping the same doc fix twice can't double-count.
+      if (entry.id && prev.some(c => c.id === entry.id)) return prev
       const next = [{ ...entry, date: new Date().toISOString() }, ...prev]
       persist({ userId, contributionLedger: next })
       return next
@@ -157,12 +200,13 @@ export function ProgressProvider({ children }) {
 
   return (
     <ProgressContext.Provider value={{
-      xp, level, levelName, nextLevelXp, prevLevelXp,
+      xp, level, levelName, levelAccent, levelBlurb, nextLevelXp, prevLevelXp,
+      levelUp, dismissLevelUp,
       certifications, earnedBadges, questStates, driftStates,
-      quizHistory, contributions, completedQuests, docFixesShipped,
+      quizHistory, sabotageHistory, contributions, completedQuests, docFixesShipped,
       timeToFirstCert, avgComprehension, sessionStart,
-      awardXp, awardBadge, certifyModule, recordQuizResult,
-      setQuestStatus, confirmDrift, dismissDrift, addContribution,
+      awardXp, awardBadge, certifyModule, recordQuizResult, recordSabotage,
+      setQuestStatus, confirmDrift, dismissDrift, reopenDrift, resolveDrift, addContribution,
       isCertified, isModuleLocked,
     }}>
       {children}

@@ -66,6 +66,8 @@ const EMPTY_PROGRESS = (userId, repoId) => ({
   badges: [],
   quests: {},
   quizHistory: {},
+  sabotageHistory: {},
+  driftStates: {},
   explainBackHistory: {},
   contributionLedger: [],
   startedAt: null,
@@ -108,16 +110,32 @@ async function getProgress(userId, repoId) {
   }
 }
 
+// One in-flight save per user at a time. The client fires several partial
+// patches in quick succession (e.g. shipping a doc fix = driftStates + xp +
+// badges + ledger); running them concurrently makes them read-modify-write the
+// same document and lose updates. This queue serialises them.
+const saveQueues = new Map()
+
+function saveProgress(userId, progressData) {
+  const prev = saveQueues.get(userId) || Promise.resolve()
+  const next = prev.catch(() => {}).then(() => writeMergedProgress(userId, progressData))
+  saveQueues.set(userId, next.catch(() => {}))
+  return next
+}
+
 /**
- * Writes (upserts) a user's progress document to Cloudant.
- * Handles the _rev required for updates automatically.
- * Writes to local fallback if Cloudant is unreachable.
+ * Writes a user's progress document. `progressData` is a PARTIAL patch (the
+ * client posts one slice at a time — xp, or quests, or driftStates, …), so we
+ * merge it onto whatever is already stored rather than replacing the document.
+ * Retries once on a write conflict. Mirrors to the local JSON fallback.
  */
-async function saveProgress(userId, progressData) {
+async function writeMergedProgress(userId, progressData) {
   const db = getClient()
 
-  // Always write fallback so local state is never lost
-  writeFallback(userId, progressData)
+  // Merge into the local fallback too — a bare write here would clobber it just
+  // as a bare putDocument would clobber Cloudant.
+  const mergedFallback = { ...(readFallback(userId) || {}), ...progressData, userId }
+  writeFallback(userId, mergedFallback)
 
   if (!db) {
     console.warn('[cloudant] no client — saved to fallback only')
@@ -126,28 +144,35 @@ async function saveProgress(userId, progressData) {
 
   const docId = progressDocId(userId)
 
-  try {
-    // Fetch current _rev so Cloudant accepts the update
-    let rev
+  for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const existing = await db.getDocument({ db: DB_PROGRESS, docId })
-      rev = existing.result._rev
-    } catch (err) {
-      if (err.status !== 404) throw err
-      // Document doesn't exist yet — create it
-    }
+      let existing = null
+      try {
+        existing = (await db.getDocument({ db: DB_PROGRESS, docId })).result
+      } catch (err) {
+        if (err.status !== 404) throw err
+        // Document doesn't exist yet — create it
+      }
 
-    await db.putDocument({
-      db: DB_PROGRESS,
-      docId,
-      document: {
-        _id: docId,
-        ...(rev ? { _rev: rev } : {}),
-        ...progressData,
-      },
-    })
-  } catch (err) {
-    console.warn('[cloudant] saveProgress error — fallback already written:', err.message)
+      const { _id, _rev, ...current } = existing || {}
+
+      await db.putDocument({
+        db: DB_PROGRESS,
+        docId,
+        document: {
+          _id: docId,
+          ...(_rev ? { _rev } : {}),
+          ...current,
+          ...progressData,
+          userId,
+        },
+      })
+      return
+    } catch (err) {
+      if (err.status === 409 && attempt === 0) continue // stale _rev — re-read and retry
+      console.warn('[cloudant] saveProgress error — fallback already written:', err.message)
+      return
+    }
   }
 }
 

@@ -8,7 +8,7 @@ import {
 
 function ModuleCard({ module, certStatus, locked, onQuiz, onExplain, onView }) {
   return (
-    <div className={`bg-carbon-layer-01 border border-carbon-border rounded-lg p-5 relative transition-opacity duration-200 group ${locked ? 'opacity-50' : 'hover:border-carbon-border-strong'}`}>
+    <div className={`card-hover bg-carbon-layer-01 border border-carbon-border rounded-lg p-5 relative group ${locked ? 'opacity-50' : 'hover:border-carbon-border-strong'}`}>
       {locked && (
         <div className="absolute inset-0 rounded-lg flex items-center justify-center z-10 backdrop-blur-[1px]">
           <div className="bg-carbon-layer-01/90 border border-carbon-border rounded px-3 py-1.5 flex items-center gap-2">
@@ -86,7 +86,7 @@ export default function ModuleList() {
   const certifiedCount = modules.filter(m => isCertified(m.id)).length
 
   return (
-    <div className="space-y-4 max-w-3xl animate-fade-up">
+    <div className="space-y-4 max-w-3xl animate-fade-up stagger-in">
       <div className="flex items-center justify-between">
         <p className="text-sm text-carbon-text-secondary">
           {modules.length} modules — complete them in order to unlock quests and earn certification.
