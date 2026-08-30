@@ -1,0 +1,26 @@
+# Credentials — never commit these
+.env
+*.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Build output
+dist/
+build/
+
+# Local fallback data
+ramp-backend/data/fallback/
+
+# Ramp-managed GitHub clones and last-opened repository state
+.ramp/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

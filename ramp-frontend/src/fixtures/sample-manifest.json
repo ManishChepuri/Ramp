@@ -1,0 +1,858 @@
+{
+  "version": "1.0",
+  "repo": {
+    "name": "node-express-realworld-example-app",
+    "commit": "30b68e1",
+    "generatedAt": "2026-08-30T00:22:44.926Z"
+  },
+  "overview": {
+    "purpose": "A REST API implementing the RealWorld (Conduit) blogging platform spec, supporting user registration and authentication, article creation and feed, comments, favorites, profile follows, and tag listing.",
+    "techStack": [
+      "Node.js 18+",
+      "TypeScript 5.2",
+      "Express 4.18",
+      "Prisma 4 (PostgreSQL)",
+      "bcryptjs",
+      "JWT (express-jwt 8 / jsonwebtoken 9)",
+      "slugify",
+      "Nx 17",
+      "Jest 29",
+      "ESLint",
+      "Prettier"
+    ],
+    "entryPoints": [
+      "src/main.ts",
+      "src/app/routes/routes.ts",
+      "src/prisma/schema.prisma"
+    ],
+    "setupSteps": [
+      "npm install",
+      "Create .env at repo root with: DATABASE_URL=, JWT_SECRET=, NODE_ENV=production",
+      "npx prisma generate",
+      "npx prisma migrate deploy",
+      "npx nx serve api",
+      "(Optional) npx prisma db seed"
+    ]
+  },
+  "modules": [
+    {
+      "id": "data",
+      "name": "Data Layer (Prisma ORM)",
+      "summary": "This module encapsulates all database access for the application using Prisma ORM. It defines four core models — User, Article, Comment, Tag — and implicit join tables with explicit relation names and cascade delete rules. A singleton PrismaClient instance is exported from a shared module to prevent connection pool exhaustion during hot-reload in development. Seed tooling is also included to bootstrap demo data for local development and testing.",
+      "keyFiles": [
+        "src/prisma/schema.prisma",
+        "src/prisma/prisma-client.ts",
+        "src/prisma/seed.ts"
+      ],
+      "dependencies": [],
+      "complexity": "medium",
+      "riskLevel": "medium",
+      "prerequisites": [],
+      "quiz": [
+        {
+          "question": "Why does prisma-client.ts assign the PrismaClient instance to global.prisma in development?",
+          "options": [
+            "To share the client across worker threads in production",
+            "To prevent multiple PrismaClient instances from being created during hot-reload, which would exhaust the connection pool",
+            "To enable Prisma's query logging feature automatically",
+            "To ensure the schema is migrated before the first query"
+          ],
+          "correctIndex": 1,
+          "explanation": "Hot-reload re-evaluates modules on every file change. Without caching the instance on global, each reload would instantiate a new PrismaClient and open a fresh connection pool, quickly exhausting available database connections."
+        },
+        {
+          "question": "In schema.prisma, the User model has two self-referential many-to-many fields: followedBy and following, both tagged 'UserFollows'. What does this single relation name on both fields signify?",
+          "options": [
+            "That both fields point to separate join tables named UserFollows",
+            "That Prisma will use one implicit join table to represent the bidirectional follow relationship between users",
+            "That only the following side is persisted; followedBy is a computed virtual field",
+            "That followedBy and following map to two distinct foreign keys on the User table itself"
+          ],
+          "correctIndex": 1,
+          "explanation": "When both sides of a self-referential relation share the same relation name, Prisma recognises them as the two ends of a single many-to-many relationship and creates one join table — the implicit _UserFollows table — to store follower/followee pairs."
+        },
+        {
+          "question": "According to schema.prisma, what happens to all Comments belonging to an Article when that Article is deleted?",
+          "options": [
+            "Comments are orphaned — their articleId is set to NULL",
+            "The delete is blocked until comments are manually removed",
+            "Comments are cascade-deleted automatically because the Article relation on Comment uses onDelete: Cascade",
+            "Comments are moved to an archive table via a Prisma middleware"
+          ],
+          "correctIndex": 2,
+          "explanation": "The article relation field on the Comment model is configured with onDelete: Cascade. This instructs the database to automatically delete all Comment rows whose articleId references the deleted Article, preventing orphaned records."
+        }
+      ],
+      "explainBack": {
+        "prompt": "Explain how the Prisma data layer in this repository is structured. Walk through the models defined in schema.prisma, describe the key relationships between them (especially the self-referential User follow relation and the cascade delete rules), and explain why prisma-client.ts exports a singleton PrismaClient rather than creating a new instance wherever it is needed.",
+        "rubric": [
+          {
+            "concept": "Singleton PrismaClient pattern",
+            "weight": 2,
+            "mustMention": [
+              "global",
+              "hot-reload",
+              "connection pool",
+              "single instance"
+            ]
+          },
+          {
+            "concept": "Self-referential User follow relation",
+            "weight": 2,
+            "mustMention": [
+              "followedBy",
+              "following",
+              "UserFollows",
+              "many-to-many",
+              "self-referential"
+            ]
+          },
+          {
+            "concept": "Cascade delete on Article → Comment",
+            "weight": 2,
+            "mustMention": [
+              "onDelete",
+              "Cascade",
+              "Comment",
+              "Article"
+            ]
+          },
+          {
+            "concept": "User → Article relationship",
+            "weight": 1,
+            "mustMention": [
+              "UserArticles",
+              "authorId",
+              "one-to-many",
+              "cascade"
+            ]
+          },
+          {
+            "concept": "User ↔ Article favorites (many-to-many)",
+            "weight": 1,
+            "mustMention": [
+              "UserFavorites",
+              "favoritedBy",
+              "many-to-many"
+            ]
+          },
+          {
+            "concept": "Article ↔ Tag implicit join table",
+            "weight": 1,
+            "mustMention": [
+              "Tag",
+              "tagList",
+              "implicit",
+              "join table"
+            ]
+          }
+        ]
+      },
+      "sabotage": [
+        {
+          "id": "sab-data-001",
+          "difficulty": "medium",
+          "file": "src/prisma/prisma-client.ts",
+          "symptom": "In development, every time a source file is saved and hot-reload triggers, the application starts throwing 'Too many connections' or similar database connection errors after a few reloads, even though the logic appears unchanged.",
+          "injectedDiff": "--- a/src/prisma/prisma-client.ts\n+++ b/src/prisma/prisma-client.ts\n@@ -17,5 +17 @@\n-const prisma = global.prisma || new PrismaClient();\n-\n-if (process.env.NODE_ENV === 'development') {\n-  global.prisma = prisma;\n-}\n+const prisma = new PrismaClient();",
+          "correctOriginal": "const prisma = global.prisma || new PrismaClient();\n\nif (process.env.NODE_ENV === 'development') {\n  global.prisma = prisma;\n}",
+          "hints": [
+            "The error only appears after multiple file saves in development — think about what happens to module-level code each time Node re-evaluates a module.",
+            "Check whether the PrismaClient instance is being reused across reloads or freshly constructed every time.",
+            "Look at how global.prisma is used in the original file and what role it plays in preventing resource leaks during hot-reload."
+          ]
+        }
+      ],
+      "quests": [
+        {
+          "id": "q-data-001",
+          "title": "Document the Prisma schema relations",
+          "type": "doc-fix",
+          "difficulty": "easy",
+          "xp": 10,
+          "files": [
+            "src/prisma/schema.prisma"
+          ],
+          "rationale": "The schema file contains no inline comments explaining the purpose of the named relations (UserArticles, UserFavorites, UserFollows) or the cascade delete rules. Adding concise block comments above each model and its relation fields will make the data model significantly easier for new contributors to understand."
+        }
+      ]
+    },
+    {
+      "id": "auth",
+      "name": "Authentication & User Management",
+      "summary": "This module handles all user authentication and account management for the application, including registration, login, and profile retrieval/update. JWT tokens are issued on every successful auth operation, signed with a configurable secret and valid for 60 days. Route protection is implemented via express-jwt middleware that extracts tokens from the Authorization header in either 'Token' or 'Bearer' scheme. Passwords are hashed using bcrypt with a cost factor of 10 before storage.",
+      "keyFiles": [
+        "src/app/routes/auth/auth.controller.ts",
+        "src/app/routes/auth/auth.service.ts",
+        "src/app/routes/auth/auth.ts",
+        "src/app/routes/auth/token.utils.ts",
+        "src/app/routes/auth/register-input.model.ts",
+        "src/app/routes/auth/registered-user.model.ts",
+        "src/app/routes/auth/user.model.ts",
+        "src/app/routes/auth/user-request.d.ts"
+      ],
+      "dependencies": [],
+      "complexity": "medium",
+      "riskLevel": "high",
+      "prerequisites": [],
+      "quiz": [
+        {
+          "question": "What bcrypt cost factor does createUser() use when hashing a new user's password?",
+          "options": [
+            "5",
+            "10",
+            "12",
+            "16"
+          ],
+          "correctIndex": 1,
+          "explanation": "auth.service.ts calls bcrypt.hash(password, 10), so the salt rounds (cost factor) is 10."
+        },
+        {
+          "question": "How long is a JWT token valid after being issued by generateToken()?",
+          "options": [
+            "1 day",
+            "7 days",
+            "30 days",
+            "60 days"
+          ],
+          "correctIndex": 3,
+          "explanation": "token.utils.ts passes { expiresIn: '60d' } to jwt.sign(), making every issued token valid for 60 days."
+        },
+        {
+          "question": "Which HTTP status code does the auth controller return when login() detects a password mismatch?",
+          "options": [
+            "401",
+            "403",
+            "404",
+            "422"
+          ],
+          "correctIndex": 1,
+          "explanation": "auth.service.ts throws a 403 error when bcrypt.compare() returns false, indicating the credentials are invalid but the account exists."
+        }
+      ],
+      "explainBack": {
+        "prompt": "Explain, as if to a new team member, how user registration and protected route access work end-to-end in this codebase — from the incoming HTTP request through middleware, service logic, and the token that comes back.",
+        "rubric": [
+          {
+            "concept": "Registration flow and validation",
+            "weight": 2,
+            "mustMention": [
+              "createUser",
+              "checkUserUniqueness",
+              "email",
+              "username"
+            ]
+          },
+          {
+            "concept": "Password hashing",
+            "weight": 2,
+            "mustMention": [
+              "bcrypt",
+              "hash",
+              "10",
+              "plain-text"
+            ]
+          },
+          {
+            "concept": "JWT generation and payload",
+            "weight": 2,
+            "mustMention": [
+              "generateToken",
+              "jwt.sign",
+              "user.id",
+              "60d"
+            ]
+          },
+          {
+            "concept": "Protected route middleware",
+            "weight": 2,
+            "mustMention": [
+              "auth.required",
+              "expressjwt",
+              "HS256",
+              "JWT_SECRET"
+            ]
+          },
+          {
+            "concept": "Token extraction from headers",
+            "weight": 1,
+            "mustMention": [
+              "getTokenFromHeaders",
+              "Authorization",
+              "Token",
+              "Bearer"
+            ]
+          },
+          {
+            "concept": "Accessing authenticated user identity in handlers",
+            "weight": 1,
+            "mustMention": [
+              "req.auth.user.id",
+              "getCurrentUser",
+              "user-request.d.ts"
+            ]
+          }
+        ]
+      },
+      "sabotage": [
+        {
+          "id": "sab-auth-001",
+          "difficulty": "medium",
+          "file": "src/app/routes/auth/token.utils.ts",
+          "symptom": "Login succeeds and protected endpoints initially work, but the token expires after about one minute instead of remaining valid for the documented session duration.",
+          "injectedDiff": "--- a/src/app/routes/auth/token.utils.ts\n+++ b/src/app/routes/auth/token.utils.ts\n@@ -2,5 +2,5 @@\n \n const generateToken = (id: number): string =>\n   jwt.sign({ user: { id } }, process.env.JWT_SECRET || 'superSecret', {\n-    expiresIn: '60d',\n+    expiresIn: '60s',\n   });",
+          "correctOriginal": "expiresIn: '60d',",
+          "hints": [
+            "The same token works briefly and then stops working, so focus on time-based token claims.",
+            "Inspect the expiresIn option passed to jwt.sign in token.utils.ts.",
+            "The duration unit was changed from days to seconds; restore the original 60-day value."
+          ]
+        }
+      ],
+      "quests": [
+        {
+          "id": "q-auth-001",
+          "title": "Add refresh-token endpoint",
+          "type": "starter",
+          "difficulty": "medium",
+          "xp": 25,
+          "files": [
+            "src/app/routes/auth/auth.controller.ts",
+            "src/app/routes/auth/auth.service.ts",
+            "src/app/routes/auth/token.utils.ts"
+          ],
+          "rationale": "Tokens currently last 60 days with no way to renew them without re-authenticating. Adding a POST /user/refresh route (protected by auth.required) that re-issues a fresh 60-day token using req.auth.user.id gives users a path to stay logged in without exposing credentials again."
+        },
+        {
+          "id": "q-auth-002",
+          "title": "Document all auth endpoints with JSDoc",
+          "type": "doc-fix",
+          "difficulty": "easy",
+          "xp": 10,
+          "files": [
+            "src/app/routes/auth/auth.controller.ts",
+            "src/app/routes/auth/auth.service.ts"
+          ],
+          "rationale": "None of the controller handlers or service functions have JSDoc comments describing their parameters, return types, or possible error conditions. Adding @param, @returns, and @throws annotations makes the contract of each function explicit and improves IDE tooling for future contributors."
+        },
+        {
+          "id": "q-auth-003",
+          "title": "Enforce minimum password length in createUser",
+          "type": "starter",
+          "difficulty": "easy",
+          "xp": 10,
+          "files": [
+            "src/app/routes/auth/auth.service.ts",
+            "src/app/routes/auth/register-input.model.ts"
+          ],
+          "rationale": "The current createUser() validation only checks that password is not blank. Adding a minimum length check (e.g. 8 characters) in the service prevents trivially weak passwords from being stored."
+        }
+      ]
+    },
+    {
+      "id": "article",
+      "name": "Article Domain",
+      "summary": "The article domain implements the full RealWorld article lifecycle including CRUD operations, comment management, and favoriting. It exposes 11 routes mounted under /articles and enforces ownership checks before mutations. Articles use slugify-generated slugs as natural keys, and tag relationships are managed via Prisma connectOrCreate and full-disconnect-then-reconnect on update. Feed and global listing differ in their author filter strategy: feed restricts to followed authors while global listing restricts to demo authors or the current user.",
+      "keyFiles": [
+        "src/app/routes/article/article.controller.ts",
+        "src/app/routes/article/article.service.ts",
+        "src/app/routes/article/article.mapper.ts",
+        "src/app/routes/article/author.mapper.ts",
+        "src/app/routes/article/article.model.ts",
+        "src/app/routes/article/comment.model.ts"
+      ],
+      "dependencies": [
+        "auth"
+      ],
+      "complexity": "high",
+      "riskLevel": "medium",
+      "prerequisites": [
+        "auth"
+      ],
+      "quiz": [
+        {
+          "question": "How does createArticle generate the slug for a new article in this codebase?",
+          "options": [
+            "It uses a UUID library to produce a random identifier",
+            "It calls slugify() on the article title provided in the request body",
+            "It takes the slug directly from the request body if present",
+            "It concatenates the author username with a timestamp"
+          ],
+          "correctIndex": 1,
+          "explanation": "article.service.ts calls slugify() on the title field from the incoming request to derive the slug; no client-supplied slug is accepted."
+        },
+        {
+          "question": "What is the key difference between getFeed and getArticles in article.service.ts?",
+          "options": [
+            "getFeed returns full article bodies while getArticles returns summaries only",
+            "getFeed filters articles to authors the current user follows, while getArticles limits results to demo authors or the current user",
+            "getArticles requires authentication but getFeed is public",
+            "getFeed ignores pagination parameters while getArticles respects offset and limit"
+          ],
+          "correctIndex": 1,
+          "explanation": "getFeed queries only articles whose authors are in the current user's following list, whereas getArticles builds a broader query restricted to demo authors or the authenticated user's own articles."
+        },
+        {
+          "question": "How does deleteComment verify that the requesting user is allowed to delete a comment?",
+          "options": [
+            "It checks that the comment's article was authored by the requesting user",
+            "It verifies that the comment's authorId matches the userId passed from the auth middleware",
+            "It relies solely on route-level auth.required without further ownership checks",
+            "It calls a shared permission helper in the auth module"
+          ],
+          "correctIndex": 1,
+          "explanation": "deleteComment in article.service.ts explicitly compares the stored authorId of the comment against the userId extracted by the auth middleware before issuing the Prisma delete."
+        },
+        {
+          "question": "Which Prisma relation operations does favoriteArticle use to record that a user has favorited an article?",
+          "options": [
+            "It creates a separate Favorite join record in its own table",
+            "It uses Prisma update with a connect operation on the favoritedBy relation of the Article model",
+            "It increments a favoritesCount integer column directly",
+            "It uses an upsert to either create or update a favorites record"
+          ],
+          "correctIndex": 1,
+          "explanation": "article.service.ts calls prisma.article.update with a nested connect on the favoritedBy many-to-many relation, linking the user to the article without a separate explicit join model call."
+        }
+      ],
+      "explainBack": {
+        "prompt": "Walk me through exactly what happens when a client sends POST /articles with a valid JWT and a JSON body containing an article object. Start from the controller, trace through the service, explain how the slug is created and tags are stored, and describe what the response looks like after the mapper runs.",
+        "rubric": [
+          {
+            "concept": "Auth middleware extracts userId before the handler runs",
+            "weight": 1,
+            "mustMention": [
+              "auth.required",
+              "userId"
+            ]
+          },
+          {
+            "concept": "Controller delegates to createArticle in the service, passing body.article and userId",
+            "weight": 1,
+            "mustMention": [
+              "createArticle",
+              "body.article"
+            ]
+          },
+          {
+            "concept": "Slug is derived by calling slugify() on the title field",
+            "weight": 2,
+            "mustMention": [
+              "slugify",
+              "title",
+              "slug"
+            ]
+          },
+          {
+            "concept": "Tags are persisted via Prisma connectOrCreate on the tagList relation",
+            "weight": 2,
+            "mustMention": [
+              "connectOrCreate",
+              "tagList"
+            ]
+          },
+          {
+            "concept": "The saved Prisma record is passed through articleMapper to produce the API response shape",
+            "weight": 1,
+            "mustMention": [
+              "articleMapper",
+              "response"
+            ]
+          },
+          {
+            "concept": "Controller returns HTTP 201 with the mapped article payload",
+            "weight": 1,
+            "mustMention": [
+              "201",
+              "article",
+              "response"
+            ]
+          }
+        ]
+      },
+      "sabotage": [
+        {
+          "id": "sab-article-001",
+          "difficulty": "medium",
+          "file": "src/app/routes/article/article.service.ts",
+          "symptom": "GET /api/articles silently skips the newest matching article: the default request starts at the second result, and every explicit offset is shifted forward by one.",
+          "injectedDiff": "--- a/src/app/routes/article/article.service.ts\n+++ b/src/app/routes/article/article.service.ts\n@@ -79,5 +79,5 @@\n     orderBy: {\n       createdAt: 'desc',\n     },\n-    skip: Number(query.offset) || 0,\n+    skip: (Number(query.offset) || 0) + 1,\n     take: Number(query.limit) || 10,",
+          "correctOriginal": "skip: Number(query.offset) || 0,",
+          "hints": [
+            "The result count is correct, but the first returned row is not the newest matching article.",
+            "Inspect how the list query maps the offset parameter to Prisma's skip option.",
+            "The injected code adds one to every offset; pass the requested offset through unchanged."
+          ]
+        }
+      ],
+      "quests": [
+        {
+          "id": "q-article-001",
+          "title": "Add input validation for createArticle request body",
+          "type": "starter",
+          "difficulty": "medium",
+          "xp": 25,
+          "files": [
+            "src/app/routes/article/article.model.ts",
+            "src/app/routes/article/article.controller.ts",
+            "src/app/routes/article/article.service.ts"
+          ],
+          "rationale": "The article creation endpoint currently accepts requests with missing or empty title, description, and body fields. Adding a validation layer would return a descriptive 422 before the service layer is reached, improving API robustness."
+        },
+        {
+          "id": "q-article-002",
+          "title": "Fix misleading JSDoc on getArticles filter logic",
+          "type": "doc-fix",
+          "difficulty": "easy",
+          "xp": 10,
+          "files": [
+            "src/app/routes/article/article.service.ts"
+          ],
+          "rationale": "The getArticles function contains no inline documentation explaining why results are limited to demo authors or the current user, which surprises contributors expecting a fully open global feed. Adding a JSDoc comment would prevent repeated confusion during onboarding."
+        }
+      ]
+    },
+    {
+      "id": "profile",
+      "name": "Profile Domain",
+      "summary": "The profile domain exposes three endpoints for retrieving and managing user follow relationships. It uses Prisma's relational connect/disconnect API to persist follows and a profileMapper utility to compute the derived 'following' boolean at read time. GET /api/profiles/:username supports optional authentication so anonymous users can view profiles without a token. POST and DELETE /api/profiles/:username/follow require a valid JWT to mutate the follow relationship.",
+      "keyFiles": [
+        "src/app/routes/profile/profile.controller.ts",
+        "src/app/routes/profile/profile.service.ts",
+        "src/app/routes/profile/profile.utils.ts",
+        "src/app/routes/profile/profile.model.ts"
+      ],
+      "dependencies": [
+        "auth"
+      ],
+      "complexity": "low",
+      "riskLevel": "low",
+      "prerequisites": [
+        "auth"
+      ],
+      "quiz": [
+        {
+          "question": "What Prisma operation does followUser use to record that the current user is now following the target user?",
+          "options": [
+            "prisma.follow.create with a userId foreign key",
+            "prisma.user.update with followedBy: { connect: { id } }",
+            "prisma.user.update with following: { connect: { id } }",
+            "prisma.user.upsert on a separate follows table"
+          ],
+          "correctIndex": 1,
+          "explanation": "followUser calls prisma.user.update targeting the profile owner and uses the nested write { followedBy: { connect: { id } } } where id is the current user's id, leveraging Prisma's implicit many-to-many relation on followedBy."
+        },
+        {
+          "question": "How does profileMapper compute the 'following' field for the returned profile object?",
+          "options": [
+            "It issues a separate prisma.follow.count query at call time",
+            "It reads a boolean column stored directly on the user row",
+            "It calls user.followedBy.some(u => u.id === id), returning false when no id is provided",
+            "It checks the JWT claims payload for a followedUsers list"
+          ],
+          "correctIndex": 2,
+          "explanation": "profileMapper receives the user object (which already has followedBy included from the Prisma query) and computes following as: id ? user.followedBy.some(u => u.id === id) : false — a pure in-memory derivation with no additional database call."
+        },
+        {
+          "question": "Which authentication middleware is applied to GET /api/profiles/:username and what does this mean for unauthenticated requests?",
+          "options": [
+            "auth.required — unauthenticated requests receive a 401 error",
+            "auth.optional — unauthenticated requests proceed normally with no userId, so 'following' will always be false",
+            "auth.optional — unauthenticated requests are redirected to the login endpoint",
+            "No middleware — the route is fully public and userId is always undefined"
+          ],
+          "correctIndex": 1,
+          "explanation": "GET /api/profiles/:username uses auth.optional, meaning a valid JWT is not required. If no token is present, userId will be undefined/null, and profileMapper will return following: false because of the id ? ... : false guard — the profile data is still returned successfully."
+        }
+      ],
+      "explainBack": {
+        "prompt": "In your own words, explain how the profile domain works end-to-end: which endpoints exist, how authentication differs between them, how following another user is stored in the database, and how the 'following' boolean ends up in the API response.",
+        "rubric": [
+          {
+            "concept": "Three endpoints and their HTTP methods/paths",
+            "weight": 1,
+            "mustMention": [
+              "GET",
+              "POST",
+              "DELETE",
+              "/api/profiles/:username/follow"
+            ]
+          },
+          {
+            "concept": "Optional vs required auth distinction on GET vs follow/unfollow",
+            "weight": 2,
+            "mustMention": [
+              "auth.optional",
+              "auth.required",
+              "unauthenticated"
+            ]
+          },
+          {
+            "concept": "Prisma connect/disconnect for follow relationship",
+            "weight": 2,
+            "mustMention": [
+              "followedBy",
+              "connect",
+              "disconnect",
+              "update"
+            ]
+          },
+          {
+            "concept": "profileMapper derives 'following' from the included followedBy array",
+            "weight": 2,
+            "mustMention": [
+              "profileMapper",
+              "followedBy",
+              "some",
+              "following"
+            ]
+          },
+          {
+            "concept": "404 error when the requested user does not exist",
+            "weight": 1,
+            "mustMention": [
+              "findUnique",
+              "404",
+              "not found"
+            ]
+          },
+          {
+            "concept": "Profile model shape returned to the client",
+            "weight": 1,
+            "mustMention": [
+              "username",
+              "bio",
+              "image",
+              "following"
+            ]
+          }
+        ]
+      },
+      "sabotage": [
+        {
+          "id": "sab-profile-001",
+          "difficulty": "medium",
+          "file": "src/app/routes/profile/profile.utils.ts",
+          "symptom": "Authenticated users always see 'following: false' in the profile response, even for users they have already followed. The follow and unfollow endpoints complete without error, but the returned profile never reflects the actual follow state.",
+          "injectedDiff": "--- a/src/app/routes/profile/profile.utils.ts\n+++ b/src/app/routes/profile/profile.utils.ts\n@@ -6,5 +6,5 @@\n   bio: user.bio,\n   image: user.image,\n   following: id\n-    ? user?.followedBy.some((followingUser: Partial<User>) => followingUser.id === id)\n+    ? user?.followedBy.some((followingUser: Partial<User>) => followingUser.id !== id)\n     : false,",
+          "correctOriginal": "? user?.followedBy.some((followingUser: Partial<User>) => followingUser.id === id)",
+          "hints": [
+            "The follow/unfollow service calls succeed and Prisma updates correctly — the bug is not in the database layer.",
+            "profileMapper is the only place that computes the 'following' boolean; add a console.log of user.followedBy and id to verify the array contains the expected entry.",
+            "Look closely at the comparison operator inside the .some() callback — a single character change can invert the entire result."
+          ]
+        }
+      ],
+      "quests": [
+        {
+          "id": "q-profile-001",
+          "title": "Add a followers count to the profile response",
+          "type": "starter",
+          "difficulty": "medium",
+          "xp": 25,
+          "files": [
+            "src/app/routes/profile/profile.model.ts",
+            "src/app/routes/profile/profile.utils.ts"
+          ],
+          "rationale": "The Profile model currently returns username, bio, image, and following, but not how many followers a user has. Extend the Profile type to include a followersCount field and update profileMapper to populate it using the length of the already-included followedBy array. No additional Prisma query is needed."
+        },
+        {
+          "id": "q-profile-002",
+          "title": "Document the profileMapper utility with JSDoc",
+          "type": "doc-fix",
+          "difficulty": "easy",
+          "xp": 10,
+          "files": [
+            "src/app/routes/profile/profile.utils.ts"
+          ],
+          "rationale": "profileMapper contains non-obvious logic: it accepts both the full Prisma user object and an optional caller id, and it computes 'following' purely in memory from an included relation. Adding a JSDoc comment would significantly improve maintainability for new contributors."
+        }
+      ]
+    },
+    {
+      "id": "tag",
+      "name": "Tag",
+      "summary": "The tag module exposes a single read-only endpoint (GET /api/tags) that returns the top 10 most-used tags across the platform. Tags are never created directly; they are implicitly created when articles are posted with a tagList. The query filters tags to those belonging to articles authored by demo users or the currently authenticated user, then orders them by article count descending.",
+      "keyFiles": [
+        "src/app/routes/tag/tag.controller.ts",
+        "src/app/routes/tag/tag.service.ts",
+        "src/app/routes/tag/tag.model.ts"
+      ],
+      "dependencies": [],
+      "complexity": "low",
+      "riskLevel": "low",
+      "prerequisites": [],
+      "quiz": [
+        {
+          "question": "How are tags created in the node-express-realworld-example-app?",
+          "options": [
+            "Via a dedicated POST /api/tags endpoint in tag.controller.ts",
+            "Implicitly when an article is created with a tagList field",
+            "By a database seed script that runs on startup",
+            "Via a PUT /api/tags endpoint that upserts tag records"
+          ],
+          "correctIndex": 1,
+          "explanation": "There is no dedicated tag-creation endpoint. Tags are created implicitly through article creation when the article payload includes a tagList."
+        },
+        {
+          "question": "What is the ordering and limit logic applied by getTags() in tag.service.ts?",
+          "options": [
+            "Tags are ordered alphabetically and the first 20 are returned",
+            "Tags are ordered by creation date descending and limited to 5",
+            "Tags are ordered by article count descending and the top 10 are returned",
+            "Tags are returned in random order with no limit"
+          ],
+          "correctIndex": 2,
+          "explanation": "getTags() uses prisma.tag.findMany ordered by the number of articles that reference each tag in descending order, then takes only the top 10 results."
+        },
+        {
+          "question": "Which articles' tags does getTags() include in its results?",
+          "options": [
+            "Tags from all articles in the database regardless of author",
+            "Only tags from articles authored by the currently authenticated user",
+            "Tags from articles authored by demo users or the currently authenticated user",
+            "Tags from articles authored by admin users only"
+          ],
+          "correctIndex": 2,
+          "explanation": "getTags() filters to tags on articles whose authors are either designated demo authors or the user identified by the optional id parameter passed from req.auth?.user?.id."
+        }
+      ],
+      "explainBack": {
+        "prompt": "Explain how the tag module works in this codebase: how tags come into existence, how GET /api/tags fetches and ranks them, what filtering is applied, and what the response shape looks like.",
+        "rubric": [
+          {
+            "concept": "Implicit tag creation via article tagList",
+            "weight": 2,
+            "mustMention": [
+              "article",
+              "tagList",
+              "implicit",
+              "no dedicated endpoint"
+            ]
+          },
+          {
+            "concept": "GET /api/tags endpoint and authentication optionality",
+            "weight": 1,
+            "mustMention": [
+              "GET /api/tags",
+              "no auth required",
+              "optional user id"
+            ]
+          },
+          {
+            "concept": "Demo author and current user filter",
+            "weight": 2,
+            "mustMention": [
+              "demo authors",
+              "current user",
+              "filter",
+              "findMany"
+            ]
+          },
+          {
+            "concept": "Top-10 ordering by article count",
+            "weight": 2,
+            "mustMention": [
+              "article count",
+              "descending",
+              "top 10",
+              "order"
+            ]
+          },
+          {
+            "concept": "Response shape",
+            "weight": 1,
+            "mustMention": [
+              "tags",
+              "array",
+              "string",
+              "name"
+            ]
+          }
+        ]
+      },
+      "sabotage": [
+        {
+          "id": "sab-tag-001",
+          "difficulty": "medium",
+          "file": "src/app/routes/tag/tag.service.ts",
+          "symptom": "GET /api/tags returns up to 10 tags but they are ordered alphabetically instead of by popularity, causing the most-used tags to no longer appear first.",
+          "injectedDiff": "--- a/src/app/routes/tag/tag.service.ts\n+++ b/src/app/routes/tag/tag.service.ts\n@@ -26,9 +26,5 @@\n     select: {\n       name: true,\n     },\n-    orderBy: {\n-      articles: {\n-        _count: 'desc',\n-      },\n-    },\n+    orderBy: { name: 'asc' },\n     take: 10,",
+          "correctOriginal": "orderBy: {\n  articles: {\n    _count: 'desc',\n  },\n},",
+          "hints": [
+            "The endpoint returns tags but the order seems wrong — check what criteria the query uses to sort results.",
+            "Look at the orderBy clause passed to prisma.tag.findMany in tag.service.ts.",
+            "The original code should sort by the count of related articles in descending order, not by the tag name."
+          ]
+        }
+      ],
+      "quests": [
+        {
+          "id": "q-tag-001",
+          "title": "Expose tag article count in the API response",
+          "type": "starter",
+          "difficulty": "medium",
+          "xp": 25,
+          "files": [
+            "src/app/routes/tag/tag.service.ts",
+            "src/app/routes/tag/tag.model.ts",
+            "src/app/routes/tag/tag.controller.ts"
+          ],
+          "rationale": "Currently GET /api/tags returns only an array of tag name strings. Extending the response to include each tag's article count would allow clients to display tag popularity without a separate request."
+        },
+        {
+          "id": "q-tag-002",
+          "title": "Add JSDoc comments to tag.service.ts",
+          "type": "doc-fix",
+          "difficulty": "easy",
+          "xp": 10,
+          "files": [
+            "src/app/routes/tag/tag.service.ts"
+          ],
+          "rationale": "The getTags function has no documentation explaining its optional id parameter, the demo-author filter, the ordering strategy, or the 10-result cap. Add JSDoc comments that make these behaviours discoverable to future contributors."
+        }
+      ]
+    }
+  ],
+  "diagrams": [
+    {
+      "type": "architecture",
+      "title": "Application Architecture Overview",
+      "mermaid": "graph TD\n    Client[\"HTTP Client\"]\n    Express[\"Express App\\n(main.ts)\"]\n    Router[\"API Router\\n(routes.ts → /api)\"]\n    AuthMW[\"JWT Middleware\\n(auth.ts)\"]\n    AuthCtrl[\"Auth Controller\\n/users, /user\"]\n    ArticleCtrl[\"Article Controller\\n/articles\"]\n    ProfileCtrl[\"Profile Controller\\n/profiles\"]\n    TagCtrl[\"Tag Controller\\n/tags\"]\n    AuthSvc[\"Auth Service\"]\n    ArticleSvc[\"Article Service\"]\n    ProfileSvc[\"Profile Service\"]\n    TagSvc[\"Tag Service\"]\n    PrismaClient[\"Prisma Client\\n(singleton)\"]\n    DB[(\"PostgreSQL\")]\n\n    Client --> Express\n    Express --> Router\n    Router --> AuthCtrl\n    Router --> ArticleCtrl\n    Router --> ProfileCtrl\n    Router --> TagCtrl\n    AuthMW --> AuthCtrl\n    AuthMW --> ArticleCtrl\n    AuthMW --> ProfileCtrl\n    AuthCtrl --> AuthSvc\n    ArticleCtrl --> ArticleSvc\n    ProfileCtrl --> ProfileSvc\n    TagCtrl --> TagSvc\n    AuthSvc --> PrismaClient\n    ArticleSvc --> PrismaClient\n    ProfileSvc --> PrismaClient\n    TagSvc --> PrismaClient\n    PrismaClient --> DB"
+    },
+    {
+      "type": "sequence",
+      "title": "User Login Flow",
+      "mermaid": "sequenceDiagram\n    participant Client\n    participant Express\n    participant AuthController\n    participant AuthService\n    participant PrismaDB\n\n    Client->>Express: POST /api/users/login { email, password }\n    Express->>AuthController: route handler invoked\n    AuthController->>AuthService: login(req.body.user)\n    AuthService->>AuthService: validate email and password not blank\n    AuthService->>PrismaDB: prisma.user.findUnique({ where: { email } })\n    PrismaDB-->>AuthService: user record (id, email, username, password hash)\n    AuthService->>AuthService: bcrypt.compare(password, user.password)\n    alt password matches\n        AuthService->>AuthService: generateToken(user.id) — jwt.sign 60d\n        AuthService-->>AuthController: { email, username, bio, image, token }\n        AuthController-->>Client: 200 { user: { email, username, bio, image, token } }\n    else password mismatch or user not found\n        AuthService-->>AuthController: throw HttpException(403)\n        AuthController-->>Client: 403 { errors: { email or password: [is invalid] } }\n    end"
+    }
+  ],
+  "docDrift": [
+    {
+      "id": "drift-001",
+      "docClaim": "README.md lists JWT_SECRET as a required environment variable, implying the application will not function without it. No warning is given about what happens if it is omitted.",
+      "codeReality": "Both src/app/routes/auth/token.utils.ts and src/app/routes/auth/auth.ts use the fallback expression `process.env.JWT_SECRET || 'superSecret'`. If JWT_SECRET is not set, the app starts and issues tokens signed with the publicly known string 'superSecret', making all issued JWTs trivially forgeable by anyone who reads the source code.",
+      "location": "README.md",
+      "severity": "high",
+      "suggestedCorrection": "Update the environment variables section to warn that JWT_SECRET has no safe fallback. If JWT_SECRET is absent the app will start but tokens will be signed with a hardcoded insecure secret. Add: 'Warning: if JWT_SECRET is not set, the app falls back to a hardcoded secret and all issued tokens are insecure. Always set JWT_SECRET in production.'",
+      "correctionDiff": "--- a/README.md\n+++ b/README.md\n@@ -24,6 +24,9 @@ Here are the required ones:\n \n ```\n DATABASE_URL=\n JWT_SECRET=\n NODE_ENV=production\n ```\n+\n+> **Warning:** `JWT_SECRET` must always be set. If omitted, the application falls back to a\n+> hardcoded secret (`superSecret`) and all issued JWT tokens are trivially forgeable.\n+> Never run in production without this variable set to a strong random string."
+    },
+    {
+      "id": "drift-002",
+      "docClaim": "The e2e test in e2e/src/server/server.spec.ts asserts that GET / returns HTTP 200 with the JSON body { message: 'Hello API' }.",
+      "codeReality": "src/main.ts line 22 defines the GET / handler as: res.json({ status: 'API is running on /api' }). The response shape has a 'status' key, not a 'message' key, and the value is 'API is running on /api', not 'Hello API'. The e2e test will always fail against the actual server.",
+      "location": "e2e/src/server/server.spec.ts",
+      "severity": "medium",
+      "suggestedCorrection": "Update the e2e test expectation to match the actual response shape returned by main.ts: expect(res.data).toEqual({ status: 'API is running on /api' })",
+      "correctionDiff": "--- a/e2e/src/server/server.spec.ts\n+++ b/e2e/src/server/server.spec.ts\n@@ -4,6 +4,6 @@ describe('GET /', () => {\n   it('should return a message', async () => {\n     const res = await axios.get(`/`);\n \n     expect(res.status).toBe(200);\n-    expect(res.data).toEqual({ message: 'Hello API' });\n+    expect(res.data).toEqual({ status: 'API is running on /api' });\n   });\n });"
+    },
+    {
+      "id": "drift-003",
+      "docClaim": "README.md states 'Run the following command to install dependencies: npm install' under Prerequisites, implying this is sufficient to get started.",
+      "codeReality": "The project uses an Nx monorepo workspace with esbuild. Running plain npm install does work for dependency installation, but the README omits that npx prisma generate must be run before the TypeScript compiler or Nx build will succeed, because the Prisma client types (imported by every service file) are generated code not present in the repo. Without this step, TypeScript compilation fails with 'Cannot find module @prisma/client'.",
+      "location": "README.md",
+      "severity": "medium",
+      "suggestedCorrection": "Reorder the Prerequisites section to make clear that npx prisma generate is required before any build or serve command, not just before the first database operation. Move the Prisma generate step directly after npm install and note that it is required for TypeScript compilation.",
+          "correctionDiff": "--- a/README.md\n+++ b/README.md\n@@ -15,3 +15,9 @@ Run the following command to install dependencies:\n ```shell\n npm install\n ```\n+\n+Next, generate the Prisma client (required for TypeScript compilation — do this before running build or serve):\n+\n+```shell\n+npx prisma generate\n+```"
+    }
+  ]
+}
