@@ -1,5 +1,5 @@
 import { useParams, useNavigate }   from 'react-router-dom'
-import { useState, useEffect }      from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useManifest }              from '../context/ManifestContext'
 import { useProgress }              from '../context/ProgressContext'
 import { useExplainBack }           from '../hooks/useExplainBack'
@@ -339,16 +339,13 @@ export default function ExplainBack({ addToast }) {
   const navigate     = useNavigate()
 
   const { phase, result, error, submit, reset } = useExplainBack()
-  const [text, setText]   = useState('')
   const [activeTab, setActiveTab] = useState('written')  // 'written' | 'voice'
+  const awardedResultRef = useRef(null)
 
   const module = manifest?.modules?.find(m => m.id === id)
-  if (!module) return <p className="text-carbon-text-placeholder">Module not found.</p>
 
-  const eb = module.explainBack
-
-  function handleAwards(r) {
-    if (!r) return
+  const handleAwards = useCallback((r) => {
+    if (!r || !module) return
     if (r.score >= 80) {
       certifyModule(module.id)
       awardXp(75)
@@ -358,13 +355,20 @@ export default function ExplainBack({ addToast }) {
         addToast?.({ message: '🏅 Badge: In Your Own Words', type: 'badge' })
       }
     }
-  }
+  }, [addToast, awardBadge, awardXp, certifyModule, earnedBadges, module])
 
   // Fire awards when written path finishes
   useEffect(() => {
-    if (phase === 'result' && result) handleAwards(result)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase])
+    if (phase === 'result' && result && awardedResultRef.current !== result) {
+      awardedResultRef.current = result
+      handleAwards(result)
+    }
+    if (phase === 'idle') awardedResultRef.current = null
+  }, [handleAwards, phase, result])
+
+  if (!module) return <p className="text-carbon-text-placeholder">Module not found.</p>
+
+  const eb = module.explainBack
 
   return (
     <div className="max-w-2xl space-y-5 animate-fade-up">

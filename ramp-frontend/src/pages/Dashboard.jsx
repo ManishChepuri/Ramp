@@ -64,7 +64,7 @@ function BadgeItem({ badge, earned }) {
 }
 
 export default function Dashboard({ addToast }) {
-  const { manifest, loading }  = useManifest()
+  const { manifest, loading, error, reload }  = useManifest()
   const { certifications, completedQuests, docFixesShipped, earnedBadges, awardBadge } = useProgress()
   const navigate = useNavigate()
 
@@ -87,6 +87,19 @@ export default function Dashboard({ addToast }) {
         </div>
         <SkeletonCard lines={2} />
       </div>
+    )
+  }
+
+  if (error || !manifest) {
+    return (
+      <EmptyState
+        icon="⚠️"
+        heading="Couldn't load the curriculum"
+        body={error || 'No manifest was returned by the server.'}
+        action={
+          <PrimaryButton onClick={reload}>Retry</PrimaryButton>
+        }
+      />
     )
   }
 
