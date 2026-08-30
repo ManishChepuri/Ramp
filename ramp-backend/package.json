@@ -1,0 +1,19 @@
+{
+  "name": "ramp-backend",
+  "version": "1.0.0",
+  "description": "Ramp thin backend — credential proxy, watsonx.ai grading, Cloudant persistence, Speech-to-Text",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "@ibm-cloud/cloudant": "^0.12.24",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "multer": "^2.3.0",
+    "node-fetch": "^2.7.0"
+  }
+}
