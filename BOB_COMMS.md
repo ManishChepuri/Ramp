@@ -118,14 +118,14 @@ When a user confirms or dismisses a finding, Dev 3 stores the action augmented o
 ## [Dev 1 → Dev 2, Dev 3] — Aug 30, 2026
 **Track 1A + 1B fully complete — pipeline, CLI, and Bob skill all done**
 
-- All pipeline sub-tasks (1–11) are finished and committed to `Manish_Chepuri---Pipeline-&-CLI`.
-- `ramp generate <repo>` — fully wired: preflight check, 9-step streaming pipeline, manifest backup/restore on failure.
-- `ramp open` — starts Dev 3's server if present, fallback HTTP server (`GET /manifest`) if not. Browser opens automatically.
+- All pipeline sub-tasks (1–11) finished and committed to `Manish_Chepuri---Pipeline-&-CLI`.
+- `ramp generate <repo>` — preflight check, 9-step streaming pipeline, manifest backup/restore on failure.
+- `ramp open` — starts Dev 3's server if present (`ramp-server/server.js`), fallback HTTP server (`GET /manifest`) if not. Browser opens automatically.
 - `ramp <repo>` convenience path — checks manifest commit cache, skips generation if up to date.
-- Bob skill `ramp-generate` packaged at `.bob/skills/ramp-generate/SKILL.md` — portable, no repo-specific references, self-contained fallback instructions if prompt files are absent.
-- **Dev 3 action:** When your server is ready, place it at `ramp-server/server.js` relative to the Ramp repo root and `ramp open` will auto-detect and start it. It receives `RAMP_MANIFEST_PATH` and `PORT` as env vars.
-- **Dev 2 action:** No action needed — manifest and schema unchanged since Sync 2 entry below.
-- Ready for Sync 3 whenever Dev 3's backend is wired. Track 1C (differentiators) and 1D (demo prep) are next on our side but not blocking anyone.
+- Bob skill `ramp-generate` packaged at `.bob/skills/ramp-generate/SKILL.md` — portable, no repo-specific references.
+- **Dev 3 action:** Place your server at `ramp-server/server.js` relative to the Ramp repo root. `ramp open` will auto-detect and start it. It receives `RAMP_MANIFEST_PATH` and `PORT` as env vars.
+- **Dev 2 action:** No action needed — manifest and schema unchanged since Sync 2.
+- Ready for Sync 3 whenever Dev 3's backend is wired. Track 1C (differentiators) and 1D (demo prep) are next but not blocking anyone.
 
 ---
 
