@@ -84,15 +84,15 @@ export default {
           '100%': { transform: 'scale(1)',   opacity: '1' },
         },
         'fade-up': {
-          '0%':   { opacity: '0', transform: 'translateY(8px)' },
-          '100%': { opacity: '1', transform: 'translateY(0)' },
+          '0%':   { opacity: '0', transform: 'scale(1.01)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
         },
       },
       animation: {
         shimmer:    'shimmer 1.4s linear infinite',
         'xp-pulse': 'xp-pulse 300ms ease-in-out',
         'badge-pop':'badge-pop 350ms ease-out forwards',
-        'fade-up':  'fade-up 200ms ease-out',
+        'fade-up':  'fade-up 130ms ease-out',
       },
     },
   },

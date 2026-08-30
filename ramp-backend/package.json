@@ -6,7 +6,8 @@
   "type": "commonjs",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "dev": "node --watch src/server.js",
+    "test": "node --test src/*.test.js"
   },
   "dependencies": {
     "@ibm-cloud/cloudant": "^0.12.24",

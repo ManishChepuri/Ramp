@@ -17,6 +17,35 @@ function Timer({ seconds }) {
   )
 }
 
+// ── Live input-level meter ───────────────────────────────────────────────────
+function MicLevel({ level, elapsed }) {
+  const bars = 12
+  const lit = Math.round(level * bars)
+  // After ~2s of near-silence, warn the mic probably isn't being heard.
+  const silent = elapsed >= 2 && level < 0.04
+  return (
+    <div className="flex flex-col items-center gap-1.5">
+      <div className="flex items-end gap-[3px] h-6" aria-hidden="true">
+        {Array.from({ length: bars }).map((_, i) => (
+          <span
+            key={i}
+            className="w-1 rounded-sm transition-all duration-75"
+            style={{
+              height: `${20 + (i / bars) * 80}%`,
+              background: i < lit
+                ? (i > bars * 0.8 ? '#f1c21b' : '#24a148')
+                : '#393939',
+            }}
+          />
+        ))}
+      </div>
+      <p className={`text-[11px] ${silent ? 'text-carbon-warning' : 'text-carbon-text-placeholder'}`}>
+        {silent ? 'No sound detected — is your mic unmuted and selected?' : 'Input level'}
+      </p>
+    </div>
+  )
+}
+
 // ── Mic button with recording ring ────────────────────────────────────────────
 function MicButton({ recording, onStart, onStop, disabled }) {
   return (
@@ -61,9 +90,9 @@ function MicButton({ recording, onStart, onStop, disabled }) {
 // ── Gap analysis result ───────────────────────────────────────────────────────
 function GapAnalysis({ result }) {
   return (
-    <div className="space-y-4 animate-fade-up">
+    <div className="space-y-4 animate-fade-up stagger-in">
       {/* Score header */}
-      <div className="flex items-center gap-4 bg-carbon-layer-01 border border-carbon-border rounded-lg p-4">
+      <div className="card-hover flex items-center gap-4 bg-carbon-layer-01 border border-carbon-border rounded-lg p-4">
         <div className="text-center flex-shrink-0">
           <p className="font-mono text-4xl font-bold text-carbon-text-primary leading-none">
             {result.score}
@@ -85,8 +114,8 @@ function GapAnalysis({ result }) {
       </div>
 
       {/* Covered / Missed */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-carbon-success-bg border border-carbon-success/20 rounded-lg p-3">
+      <div className="grid grid-cols-2 gap-3 stagger-in">
+        <div className="card-hover bg-carbon-success-bg border border-carbon-success/20 rounded-lg p-3">
           <h4 className="text-xs font-semibold text-carbon-success uppercase tracking-wider mb-2 flex items-center gap-1">
             <span>✓</span> Concepts Covered
           </h4>
@@ -103,7 +132,7 @@ function GapAnalysis({ result }) {
             </ul>
           )}
         </div>
-        <div className="bg-carbon-error-bg border border-carbon-error/20 rounded-lg p-3">
+        <div className="card-hover bg-carbon-error-bg border border-carbon-error/20 rounded-lg p-3">
           <h4 className="text-xs font-semibold text-carbon-error uppercase tracking-wider mb-2 flex items-center gap-1">
             <span>✗</span> Concepts Missed
           </h4>
@@ -135,7 +164,7 @@ function GapAnalysis({ result }) {
       )}
 
       {/* Feedback */}
-      <div className="bg-carbon-layer-01 border border-carbon-border rounded-lg p-4">
+      <div className="card-hover bg-carbon-layer-01 border border-carbon-border rounded-lg p-4">
         <h4 className="text-xs font-semibold text-carbon-text-placeholder uppercase tracking-wider mb-2">
           Feedback
         </h4>
@@ -251,6 +280,7 @@ function VoiceTab({ module, onGradeResult }) {
             <span className="text-xs text-carbon-text-secondary">Recording</span>
             <Timer seconds={rec.elapsed} />
           </div>
+          <MicLevel level={rec.level} elapsed={rec.elapsed} />
           <p className="text-xs text-carbon-text-placeholder text-center max-w-xs">
             Click stop when you're done. You'll be able to review and correct the transcript before submitting.
           </p>
@@ -385,7 +415,7 @@ export default function ExplainBack({ addToast }) {
       </div>
 
       {/* Prompt card */}
-      <div className="bg-carbon-layer-01 border border-carbon-border rounded-lg p-4">
+      <div className="card-hover bg-carbon-layer-01 border border-carbon-border rounded-lg p-4">
         <p className="text-xs text-carbon-text-placeholder uppercase tracking-wider mb-2 font-medium">Your Prompt</p>
         <p className="text-base text-carbon-text-primary leading-relaxed">{eb?.prompt}</p>
       </div>

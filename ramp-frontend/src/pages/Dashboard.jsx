@@ -4,11 +4,12 @@ import { useManifest }  from '../context/ManifestContext'
 import { useProgress }  from '../context/ProgressContext'
 import { ProgressBar, SkeletonCard, Skeleton, EmptyState, PrimaryButton } from '../components/ui/index'
 import { useCountUp } from '../hooks/useCountUp'
+import OpenAnotherRepo from '../components/OpenAnotherRepo'
 
 function StatCard({ value, label, accent = false }) {
   const animated = useCountUp(value ?? 0)
   return (
-    <div className={`bg-carbon-layer-01 border rounded-lg p-5 flex flex-col gap-2 ${accent ? 'border-carbon-brand/40' : 'border-carbon-border'}`}>
+    <div className={`card-hover bg-carbon-layer-01 border rounded-lg p-5 flex flex-col gap-2 ${accent ? 'border-carbon-brand/40' : 'border-carbon-border'}`}>
       <span className={`font-mono text-4xl font-bold ${accent ? 'text-carbon-brand' : 'text-carbon-text-primary'}`}>
         {animated}
       </span>
@@ -20,14 +21,14 @@ function StatCard({ value, label, accent = false }) {
 function NextAction({ module, certifications, navigate }) {
   if (!module) {
     return (
-      <div className="bg-carbon-layer-01 border border-carbon-border border-l-4 border-l-carbon-success rounded-lg p-4">
+      <div className="card-hover bg-carbon-layer-01 border border-carbon-border border-l-4 border-l-carbon-success rounded-lg p-4">
         <p className="text-xs text-carbon-text-placeholder uppercase tracking-wider mb-1">Status</p>
         <p className="text-base font-semibold text-carbon-success">✓ All modules certified — you're ready to contribute!</p>
       </div>
     )
   }
   return (
-    <div className="bg-carbon-layer-01 border border-carbon-border border-l-4 border-l-carbon-quest rounded-lg p-4 flex items-center justify-between gap-4">
+    <div className="card-hover bg-carbon-layer-01 border border-carbon-border border-l-4 border-l-carbon-quest rounded-lg p-4 flex items-center justify-between gap-4">
       <div className="min-w-0">
         <p className="text-xs text-carbon-text-placeholder uppercase tracking-wider mb-1">Next Recommended Action</p>
         <p className="text-base font-semibold text-carbon-text-primary truncate">
@@ -110,9 +111,9 @@ export default function Dashboard({ addToast }) {
   const nextModule = modules.find(m => !certifications.includes(m.id))
 
   return (
-    <div className="space-y-5 max-w-4xl animate-fade-up">
+    <div className="space-y-5 max-w-4xl animate-fade-up stagger-in">
       {/* Hero progress card */}
-      <div className="bg-carbon-layer-01 border border-carbon-border rounded-lg p-6 space-y-4">
+      <div className="card-hover bg-carbon-layer-01 border border-carbon-border rounded-lg p-6 space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-bold text-carbon-text-primary tracking-tight">
@@ -137,7 +138,7 @@ export default function Dashboard({ addToast }) {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-4 stagger-in">
         <StatCard value={certCount}       label="Modules Certified" accent={certCount > 0} />
         <StatCard value={completedQuests} label="Quests Completed" />
         <StatCard value={docFixesShipped} label="Doc Fixes Shipped" />
@@ -148,7 +149,7 @@ export default function Dashboard({ addToast }) {
 
       {/* Badges */}
       {manifest.badges?.length > 0 && (
-        <div className="bg-carbon-layer-01 border border-carbon-border rounded-lg p-5">
+        <div className="card-hover bg-carbon-layer-01 border border-carbon-border rounded-lg p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-carbon-text-primary">Achievements</h3>
             <span className="font-mono text-xs text-carbon-text-placeholder">
@@ -162,6 +163,9 @@ export default function Dashboard({ addToast }) {
           </div>
         </div>
       )}
+
+      {/* How to point Ramp at another repo */}
+      <OpenAnotherRepo />
     </div>
   )
 }

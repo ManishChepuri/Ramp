@@ -82,7 +82,7 @@ async function generateWithWatsonx(repoPath, options = {}) {
     { role: 'user', content: driftPrompt(driftContext) },
   ], {
     maxTokens: 6000,
-    normalize: normalizeDrift,
+    normalize: value => normalizeDrift(value, logger),
     validate: value => validateDrift(value, scan, repoPath),
   });
   logger.log(`  [4/5] Generated 2 diagrams and ${docDrift.length} validated drift findings`);
@@ -550,10 +550,20 @@ function validateDrift(value, scan, repoPath) {
   });
 }
 
-function normalizeDrift(value) {
+function normalizeDrift(value, logger) {
   if (Array.isArray(value)) return value;
   for (const field of ['docDrift', 'findings', 'drift']) {
     if (Array.isArray(value?.[field])) return value[field];
+  }
+  // Nothing recognizable — the pipeline recovers by treating this as "no drift",
+  // but a genuine empty result and a degraded/unparseable model response are
+  // indistinguishable downstream. Surface the difference here so an unexpected
+  // "0 findings" run can be traced back to a parse problem rather than the repo.
+  if (logger && typeof logger.log === 'function') {
+    logger.log(
+      '        [warn] docDrift: model response did not match the expected array shape — '
+      + 'recording zero findings. If drift was expected, inspect the raw response.',
+    );
   }
   return [];
 }

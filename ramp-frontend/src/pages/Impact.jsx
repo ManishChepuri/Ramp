@@ -9,7 +9,7 @@ function KpiCard({ value, label, unit, muted = false }) {
   const display  = numeric != null ? animated : (value ?? '—')
 
   return (
-    <div className="bg-carbon-layer-01 border border-carbon-border rounded-lg p-5 space-y-2">
+    <div className="card-hover bg-carbon-layer-01 border border-carbon-border rounded-lg p-5 space-y-2">
       <div className="flex items-end gap-2">
         <span className="font-mono text-4xl font-bold text-carbon-text-primary leading-none">
           {display}
@@ -34,9 +34,9 @@ export default function Impact() {
   const BASELINE_CORRECTNESS  = '2 / 5'
 
   return (
-    <div className="space-y-5 max-w-4xl animate-fade-up">
+    <div className="space-y-5 max-w-4xl animate-fade-up stagger-in">
       {/* KPIs */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-4 stagger-in">
         <KpiCard
           value={timeToFirstCert}
           unit="min"
@@ -54,7 +54,7 @@ export default function Impact() {
       </div>
 
       {/* Before / After comparison */}
-      <div className="bg-carbon-layer-01 border border-carbon-border rounded-lg overflow-hidden">
+      <div className="card-hover bg-carbon-layer-01 border border-carbon-border rounded-lg overflow-hidden">
         <div className="px-5 py-3 border-b border-carbon-border">
           <h3 className="text-sm font-semibold text-carbon-text-primary">Manual Onboarding vs Ramp</h3>
           <p className="text-xs text-carbon-text-placeholder mt-0.5">Head-to-head comparison against a cold manual baseline</p>
@@ -96,7 +96,7 @@ export default function Impact() {
       </div>
 
       {/* Module certification progress */}
-      <div className="bg-carbon-layer-01 border border-carbon-border rounded-lg p-5 space-y-4">
+      <div className="card-hover bg-carbon-layer-01 border border-carbon-border rounded-lg p-5 space-y-4">
         <h3 className="text-sm font-semibold text-carbon-text-primary">Module Certification Progress</h3>
         {modules.length === 0 ? (
           <p className="text-xs text-carbon-text-placeholder">No modules yet.</p>
@@ -126,7 +126,7 @@ export default function Impact() {
       </div>
 
       {/* Contribution ledger */}
-      <div className="bg-carbon-layer-01 border border-carbon-border rounded-lg overflow-hidden">
+      <div className="card-hover bg-carbon-layer-01 border border-carbon-border rounded-lg overflow-hidden">
         <div className="px-5 py-3 border-b border-carbon-border">
           <h3 className="text-sm font-semibold text-carbon-text-primary">Contribution Ledger</h3>
           <p className="text-xs text-carbon-text-placeholder mt-0.5">Real improvements shipped during onboarding</p>

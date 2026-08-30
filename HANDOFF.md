@@ -9,6 +9,116 @@ session, what's proven working, what's still broken, and what to do next.
 
 ---
 
+## 0. Resumed-session update (Aug 30, 2026 — later)
+
+A later session picked this up. Changes since the handoff below was written:
+
+- **§7 / step 1 (commit the uncommitted work): DONE.** It all landed as commit
+  `3ababd6 "Adding context file"` — the whole watsonx migration, every §4.2–4.4 fix, and this file.
+  The working tree is clean; there is nothing left to rescue from §7.
+- **§5.1 (Cloudant credentials): RESOLVED.** The current `ramp-backend/.env` key works. Live-probed:
+  server info OK, `ramp-progress` + `ramp-manifests` DBs present, full progress round-trip persists
+  to Cloudant — verified directly *and* through `POST /api/progress/:userId` → `GET`. `/api/grade`
+  (watsonx) and `/api/manifest` also confirmed live against real IBM services.
+- **§5.2 (docDrift 0-findings ambiguity): FIXED.** `normalizeDrift` (`cli/lib/watsonx-pipeline.js`)
+  now logs a `[warn] docDrift: model response did not match the expected array shape` line when it
+  recovers zero findings from an unrecognized payload. Genuine empty results stay silent. Test added.
+- **Test suite is now 34/34** (was 33/33 — one test added for the drift warning). `cd cli && npm test`.
+  `npm install` is required first in `cli/`, `ramp-backend/`, and `ramp-frontend/` on a fresh checkout —
+  none of the `node_modules` are committed.
+- **§5.3 (sabotage quality): spot-checked.** 4 of 5 cases in the current
+  `fixtures/sample-manifest.json` are accurate. **`sab-profile-001` symptom text is wrong** — the
+  `===`→`!==` flip makes `followedBy.some(...)` over-match (skews `following: true`), but the symptom
+  claims "always `following: false`", which only holds for a profile with 0–1 followers. Fix the
+  symptom or regenerate that module before demoing sabotage.
+- **Frontend is now built** (`ramp-frontend/dist` exists) so `ramp open` serves the real UI.
+- Still open: §5.3 `sab-profile-001` wording, steps 3 (manual UI walkthrough — needs a human),
+  5 (Subtask 13 — confirm if judging needs it), and 6 (done: BOB_COMMS entry added).
+
+### Integrated IDE feature (added later in the resumed session)
+
+Module view and Sabotage view now have a **Monaco editor pane** on the right. Full detail is in the
+newest `BOB_COMMS.md` entry; short version:
+
+- **Backend** (`ramp-backend/src/`): new `repo.js` + `sabotage-verify.js`; routes `GET /api/repo/meta`,
+  `GET /api/repo/file`, `GET /api/sabotage/:m/:s/file`, `POST /api/sabotage/verify`. Verify runs in an
+  isolated scratch copy — tries the repo's real `npm test`, falls back to a static reverse-diff check.
+  New `npm test` in `ramp-backend/` → **11/11**. Repo root comes from `dirname(MANIFEST_PATH)` (or
+  `RAMP_REPO_PATH`), so a generated `ramp open` "just works"; fixture-only runs show a graceful
+  "run ramp generate" state.
+- **Frontend** (`ramp-frontend/src/`): new dep `@monaco-editor/react` (bundled, lazy, code-split).
+  New `components/ide/IdePanel.jsx`, `components/KeyFilesBox.jsx`, `hooks/useRepoFile.js`,
+  `hooks/useRepoMeta.js`, `lib/monacoSetup.js`+`lib/monaco.worker.js`, `lib/sabotageDiff.js`.
+  Module view: Key Files are clickable → open read-only in the pane. Sabotage view: Key Files box
+  added; the fix textarea is replaced by editing the file in Monaco + a **Submit Code** button;
+  **5-attempt limit**; extra diff-derived hint at attempt 3; bug location + fix revealed at attempt 5.
+  `ProgressContext` persists `sabotageHistory`.
+- `npm run build` + `npm run lint` clean. Clicked through in headless Chrome: Module two-pane + Monaco,
+  Sabotage editable IDE + submit, 5-attempt reveal, auto-hint@3, and the normal win (+75 XP) all work.
+
+### Identity + level system (added later in the resumed session)
+
+Approved design pitch, all implemented and verified. Detail is in the newest `BOB_COMMS.md` entry.
+
+- **`src/lib/levels.js`** — the level system's single source of truth (name, XP, accent hex, blurb).
+- **Constellation mascot** (`src/components/Constellation.jsx` + `Mascot.jsx`) — evolving node-graph,
+  bottom-right, idle-animated, click → `/impact`.
+- **Level-up modal** (`src/components/LevelUpModal.jsx`) — centre card + spark burst, fires only on a
+  real XP climb (hydration-guarded), mounted in `AppShell`.
+- **Per-level accent colours** — sidebar XP widget + bar + XP toast progress bar tint by level.
+- **Logo** — "Ascent" mark, containerless, new `public/favicon.svg`, `<title>` → `Ramp`.
+- **`OpenAnotherRepo.jsx`** — Dashboard card with the copy-paste `generate` / `open` commands.
+- **STT "nothing transcribed"** — a chain of issues, all fixed:
+  1. Silent recording → `useAudioRecorder` now has a live mic-level meter, rejects silent/empty
+     audio with a clear message, no more blank textbox.
+  2. `audio/webm;codecs=opus` Content-Type → Watson 400. Frontend now picks an explicit
+     `audio/webm`/`ogg` type and strips the `;codecs=` param; backend `stt.js` normalizes and gives
+     Safari (`audio/mp4`) a "use Chrome/Firefox" message. Both log byte counts / IBM error bodies.
+  3. **Grading 403** — `src/iam.js` cached one IAM token for all keys; transcribing first cached the
+     STT token, then grading reused it → 403 "Grading service unavailable." Now caches **per API
+     key** (`Map`). Regression test in `src/iam.test.js`.
+- Backend `npm test` **15/15**, CLI **34/34**, frontend build + lint clean. Voice record →
+  transcribe → grade verified end to end in one session.
+
+### Doc Drift → real ship-a-fix flow + persistence fix (added later)
+
+- **`src/pages/DocDrift.jsx`**: a confirmed finding shows Bob's patch inline + an "Apply this fix"
+  block (Copy diff, Download `.patch`, `git apply --recount` command with copies, `--3way`
+  fallback, editable pre-filled commit message). **"Mark as Shipped"** marks the finding `resolved`
+  (persisted), awards XP by severity (25/15/10), adds one de-duped contribution-ledger entry,
+  grants *Rent Paid*. Dismiss is undoable. Ramp never writes your working tree — you `git apply`
+  the copied/downloaded patch yourself.
+- **`src/context/ProgressContext.jsx`**: `driftStates` (`pending→confirmed|dismissed→resolved`) is
+  now persisted and reloaded; `addContribution` de-dupes by id.
+- **`ramp-backend/src/cloudant.js`**: fixed the progress-clobber bug — `saveProgress` **merges**
+  partial patches onto the stored doc (was a full-doc `putDocument` that wiped other fields),
+  **serialises** saves per user (the ship handler fires several patches at once), and retries once
+  on a 409. `EMPTY_PROGRESS` gained `driftStates: {}`.
+- **Quest Board is unchanged** (kept by request) — it just persists correctly now.
+
+### Workspace layout — resizable panes + collapsible nav (added later)
+
+- **`src/components/SplitPane.jsx`** (new) — draggable vertical divider between the docs/hints pane
+  and the integrated IDE, in Module view and Sabotage view. Width remembered per view in
+  `localStorage`, clamped 26–74%, double-click resets, stacks below `lg`.
+- **Collapsible nav sidebar** — chevron toggle on the sidebar's right edge; collapsed → `w-0`,
+  content reflows to full width, state persisted. `src/components/layout/XpWidget.jsx` (new,
+  extracted from `Sidebar`) renders in the sidebar when open and as a **floating bottom-left card**
+  when collapsed so the level/XP is always visible.
+- Touches `AppShell.jsx`, `Sidebar.jsx`, `ModuleDetail.jsx`, `Sabotage.jsx`. No backend/schema.
+- **Verify speed:** `POST /api/sabotage/verify` skips the real `npm test` path for repos that need a
+  DB/ORM/nx/e2e (detected up front) — those get a static-only check that returns in ~15 ms instead of
+  spinning for minutes. Non-DB repos still get the real suite (25 s timeout, user-run first). The
+  frontend also aborts a hung verify after 30 s. Backend tests: **13/13**.
+
+Uncommitted in this resumed session: the §5.2 drift fix (`cli/lib/watsonx-pipeline.js` + test), the
+integrated-IDE feature (all `ramp-backend/src/repo*`, `ramp-backend/src/sabotage-verify*`,
+`ramp-backend/src/server.js`, `ramp-backend/src/cloudant.js`, `ramp-backend/package.json`, and the
+`ramp-frontend/src/**` files + `package.json`/`package-lock.json` listed above), `BOB_COMMS.md`, and
+this file. Commit when ready.
+
+---
+
 ## 1. What Ramp is
 
 Ramp is a CLI tool + local web app that certifies a developer actually understands an unfamiliar

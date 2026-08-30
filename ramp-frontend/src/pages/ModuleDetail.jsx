@@ -1,9 +1,13 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useManifest }  from '../context/ManifestContext'
 import { useProgress }  from '../context/ProgressContext'
 import { useQuiz }      from '../hooks/useQuiz'
-import { RiskBadge, ComplexityBadge, CertificationChip, ProgressBar } from '../components/ui/index'
+import { useRepoMeta }  from '../hooks/useRepoMeta'
+import KeyFilesBox      from '../components/KeyFilesBox'
+import IdePanel         from '../components/ide/IdePanel'
+import SplitPane        from '../components/SplitPane'
+import { RiskBadge, ComplexityBadge, CertificationChip } from '../components/ui/index'
 import mermaid from 'mermaid'
 
 mermaid.initialize({ startOnLoad: false, theme: 'dark', darkMode: true, background: 'transparent' })
@@ -29,37 +33,11 @@ function MermaidDiagram({ diagram }) {
   )
 }
 
-// ── Key files list ──────────────────────────────────────────────────────────
-function KeyFilesList({ files }) {
-  const [open, setOpen] = useState(true)
-  return (
-    <div className="bg-carbon-layer-01 border border-carbon-border rounded-lg overflow-hidden">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-carbon-text-primary hover:bg-carbon-layer-02 transition-colors"
-      >
-        <span>Key Files</span>
-        <span className="text-carbon-text-placeholder">{open ? '▲' : '▼'}</span>
-      </button>
-      {open && (
-        <ul className="divide-y divide-carbon-border">
-          {files.map(f => (
-            <li key={f} className="px-4 py-2 font-mono text-xs text-carbon-text-secondary bg-carbon-layer-02 hover:text-carbon-interactive">
-              {f}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  )
-}
-
 // ── Quiz card ────────────────────────────────────────────────────────────────
 function QuizSection({ module, addToast }) {
-  const { certifyModule, recordQuizResult, awardXp, awardBadge, isCertified, earnedBadges } = useProgress()
+  const { certifyModule, recordQuizResult, awardXp, awardBadge, earnedBadges } = useProgress()
   const quiz = useQuiz(module.quiz ?? [])
 
-  // Fire side-effects once when quiz reaches result phase
   useEffect(() => {
     if (quiz.phase !== 'result') return
     recordQuizResult(module.id, quiz.score, quiz.total)
@@ -107,7 +85,6 @@ function QuizSection({ module, addToast }) {
 
   return (
     <div className="bg-carbon-layer-01 border border-carbon-border rounded-lg p-5 space-y-4">
-      {/* Progress dots */}
       <div className="flex items-center gap-1.5">
         {Array.from({ length: quiz.total }).map((_, i) => (
           <span key={i} className={`w-2 h-2 rounded-full transition-colors ${
@@ -156,11 +133,7 @@ function QuizSection({ module, addToast }) {
         </button>
       ) : (
         <button
-          onClick={() => {
-            const isLast = quiz.index === quiz.total - 1
-            quiz.next()
-            if (isLast) handleComplete()
-          }}
+          onClick={quiz.next}
           className="px-4 py-2 bg-carbon-brand text-white text-sm rounded hover:bg-carbon-interactive-hover transition-colors"
         >
           {quiz.index < quiz.total - 1 ? 'Next Question →' : 'See Results'}
@@ -172,67 +145,110 @@ function QuizSection({ module, addToast }) {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 export default function ModuleDetail({ addToast }) {
-  const { id }             = useParams()
-  const { manifest }       = useManifest()
+  const { id }       = useParams()
+  const { manifest } = useManifest()
   const { isCertified, earnedBadges, awardBadge } = useProgress()
-  const navigate           = useNavigate()
+  const navigate     = useNavigate()
+  const repoMeta     = useRepoMeta()
 
-  const module  = manifest?.modules?.find(m => m.id === id)
+  const module   = manifest?.modules?.find(m => m.id === id)
   const diagrams = manifest?.diagrams ?? []
+  const keyFiles = module?.keyFiles ?? []
+
+  const [openTabs, setOpenTabs]   = useState([])
+  const [activePath, setActivePath] = useState(null)
+
+  // Open the first key file once, when the repo checkout is available.
+  useEffect(() => {
+    if (repoMeta.available && keyFiles.length && openTabs.length === 0) {
+      setOpenTabs([keyFiles[0]])
+      setActivePath(keyFiles[0])
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repoMeta.available, module?.id])
 
   useEffect(() => {
     if (!earnedBadges.includes('cartographer') && diagrams.length > 0) {
       awardBadge('cartographer')
       addToast?.({ message: '🏅 Badge: Cartographer', type: 'badge' })
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   if (!module) return <p className="text-carbon-text-placeholder">Module not found.</p>
 
+  function openFile(path) {
+    setOpenTabs(tabs => (tabs.includes(path) ? tabs : [...tabs, path]))
+    setActivePath(path)
+  }
+
   return (
-    <div className="max-w-5xl grid grid-cols-5 gap-6">
-      {/* Left — module info */}
-      <div className="col-span-3 space-y-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-bold text-carbon-text-primary">{module.name}</h2>
-            <div className="flex items-center gap-2 mt-2">
-              <RiskBadge level={module.riskLevel} />
-              <ComplexityBadge level={module.complexity} />
-              <CertificationChip status={isCertified(module.id) ? 'certified' : 'in-progress'} />
-            </div>
-          </div>
-          <div className="flex flex-col gap-2 flex-shrink-0">
-            <button
-              onClick={() => navigate(`/modules/${id}/explain`)}
-              className="px-3 py-1.5 text-xs border border-carbon-interactive text-carbon-interactive rounded hover:bg-carbon-interactive/10 transition-colors"
-            >
-              Explain Back →
-            </button>
-            {module.sabotage?.length > 0 && isCertified(module.id) && (
-              <button
-                onClick={() => navigate(`/modules/${id}/sabotage`)}
-                className="px-3 py-1.5 text-xs border border-carbon-sabotage/50 text-carbon-sabotage bg-carbon-sabotage-bg rounded hover:opacity-90 transition-colors"
-              >
-                🐛 Sabotage Mode
-              </button>
-            )}
+    <div className="h-full flex flex-col gap-4 animate-fade-up">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-carbon-text-primary">{module.name}</h2>
+          <div className="flex items-center gap-2 mt-2">
+            <RiskBadge level={module.riskLevel} />
+            <ComplexityBadge level={module.complexity} />
+            <CertificationChip status={isCertified(module.id) ? 'certified' : 'in-progress'} />
           </div>
         </div>
-
-        <p className="text-sm text-carbon-text-secondary leading-relaxed">{module.summary}</p>
-
-        <KeyFilesList files={module.keyFiles ?? []} />
-
-        {/* Diagrams for this module */}
-        {diagrams.map(d => <MermaidDiagram key={d.title} diagram={d} />)}
+        <div className="flex flex-row items-center gap-3 flex-shrink-0">
+          <button
+            onClick={() => navigate(`/modules/${id}/explain`)}
+            className="px-4 py-2 text-sm font-semibold border border-carbon-interactive text-carbon-interactive rounded hover:bg-carbon-interactive/10 transition-colors"
+          >
+            Explain Back →
+          </button>
+          {module.sabotage?.length > 0 && isCertified(module.id) && (
+            <button
+              onClick={() => navigate(`/modules/${id}/sabotage`)}
+              className="px-4 py-2 text-sm font-semibold border border-carbon-sabotage/50 text-carbon-sabotage bg-carbon-sabotage-bg rounded hover:opacity-90 transition-colors"
+            >
+              Sabotage Mode
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Right — quiz */}
-      <div className="col-span-2 space-y-4">
-        <h3 className="text-sm font-semibold text-carbon-text-primary">Module Quiz</h3>
-        <QuizSection module={module} addToast={addToast} />
-      </div>
+      {/* Two-pane workspace: docs + quiz on the left, integrated IDE on the right.
+          Drag the divider to resize; double-click it to reset. */}
+      <SplitPane
+        storageKey="ramp.split.module"
+        left={
+          <div className="space-y-5 stagger-in">
+            <p className="text-sm text-carbon-text-secondary leading-relaxed">{module.summary}</p>
+
+            <KeyFilesBox
+              files={keyFiles}
+              activePath={activePath}
+              onOpen={openFile}
+              disabled={repoMeta.available === false}
+            />
+
+            {diagrams.map(d => <MermaidDiagram key={d.title} diagram={d} />)}
+
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-carbon-text-primary">Module Quiz</h3>
+              <QuizSection module={module} addToast={addToast} />
+            </div>
+          </div>
+        }
+        right={
+          <IdePanel
+            tabs={openTabs.map(p => ({ path: p, editable: false }))}
+            activePath={activePath}
+            onActivePathChange={setActivePath}
+            repoAvailable={repoMeta.available}
+            statusBar={
+              <p className="text-[11px] text-carbon-text-placeholder">
+                Read-only · click a key file on the left to open it here
+              </p>
+            }
+          />
+        }
+      />
     </div>
   )
 }

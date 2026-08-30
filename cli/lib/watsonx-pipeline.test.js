@@ -169,6 +169,19 @@ test('normalizes wrapped drift findings and conservatively rejects unknown shape
   assert.deepEqual(normalizeDrift({ message: 'No drift found' }), []);
 });
 
+test('warns only when a drift response is an unrecognized shape, not when it is genuinely empty', () => {
+  const lines = [];
+  const logger = { log: message => lines.push(message) };
+
+  assert.deepEqual(normalizeDrift([], logger), []);
+  assert.deepEqual(normalizeDrift({ docDrift: [] }, logger), []);
+  assert.equal(lines.length, 0, 'genuine empty results must not warn');
+
+  assert.deepEqual(normalizeDrift({ message: 'No drift found' }, logger), []);
+  assert.equal(lines.length, 1);
+  assert.match(lines[0], /docDrift: model response did not match/);
+});
+
 test('grounds discovery paths and dependencies to the scanned inventory', () => {
   const scan = {
     files: [
