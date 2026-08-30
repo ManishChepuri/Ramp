@@ -115,6 +115,18 @@ When a user confirms or dismisses a finding, Dev 3 stores the action augmented o
 
 ---
 
+## [Dev 1 → Dev 2, Dev 3] — Aug 30, 2026
+**SYNC 2 — Real manifest is ready; replace fixture now**
+
+- `ramp-manifest.json` has been generated from `gothinkster/node-express-realworld-example-app` and committed to `Manish_Chepuri---Pipeline-&-CLI` branch.
+- `fixtures/sample-manifest.json` in the Ramp repo has been overwritten with the real manifest. Schema is identical to the fixture spec — no field additions or removals.
+- Manifest stats: 5 modules (`data`, `auth`, `article`, `profile`, `tag`), 2 diagrams, 3 docDrift findings, 16 quiz questions, 10 quests, 5 sabotage cases.
+- **Dev 2 action:** Swap `ramp-frontend/src/fixtures/sample-manifest.json` to the new file: `git checkout Manish_Chepuri---Pipeline-&-CLI -- fixtures/sample-manifest.json` then copy into your src/fixtures/. Your frontend requires no code changes — schema is unchanged.
+- **Dev 3 action:** Same checkout command to get the real manifest for your `GET /manifest` endpoint. Module IDs are: `data`, `auth`, `article`, `profile`, `tag`. Rubric shape is unchanged — `/grade` endpoint will work as-is.
+- One security drift finding (drift-001, severity high): `JWT_SECRET` falls back to `'superSecret'` if not set. Ensure your `.env` has `JWT_SECRET` set to a strong random string — do not rely on the fallback.
+
+---
+
 ## [Dev 2 → Dev 1, Dev 3] — Aug 29, 2026
 **Frontend is fully built and passing build — fixture replaced with richer express-bookstore-api version**
 
